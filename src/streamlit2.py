@@ -91,7 +91,11 @@ def main():
 
         # Create two columns for Models and Endpoints
         col1, col2 = st.columns(2)
-
+        def strip_user_id(name):
+            parts = re.split('[-_]', name)
+            if parts[-1].isdigit():  # If the last part is a digit, it's the user ID
+                return '-'.join(parts[:-1])  # Return the name without the ID
+            return name  # Return the name unchanged if no numeric suffix is found
         with col1:
             if models_response.status_code == 200:
                 models = models_response.json().get('models', [])
@@ -104,8 +108,7 @@ def main():
                     # Display models with selection options
                     for model in models:
                         # Remove the _id suffix if present in display_name
-                        display_name = '_'.join(model["display_name"].split('_')[:-1]) if '_' in model["display_name"] else model["display_name"]
-                        
+                        display_name = strip_user_id(model["display_name"])
                         with st.expander(display_name):
                             st.write("**Status:** Not Deployed")
                             if st.button(f"Deploy {display_name}", key=f"deploy_{model["display_name"]}"):
@@ -131,8 +134,7 @@ def main():
                     for endpoint in endpoints:
                         # Remove the _id suffix if present in displayName
                         
-                        display_name = '_'.join(endpoint["display_name"].split('_')[:-1]) if '_' in endpoint["display_name"] else endpoint["display_name"]
-                        
+                        display_name = strip_user_id(endpoint["display_name"])
                         with st.expander(display_name):
                             col1, col2 = st.columns(2)
                             with col1:

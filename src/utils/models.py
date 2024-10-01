@@ -1418,12 +1418,11 @@ def endpoint_predict(selected_endpoint_id):
                                     st.divider()
                                     calculate_accuracy(merged_data[target_column], merged_data['Predicted'])
                                 st.divider()
-                                plot_actual_vs_predicted_combined(combined_data, date_column, target_column, identifier_column, is_fallback=True)
                                 plot_forecast(train_data, test_data, combined_data, date_column, target_column, forecast_horizon, predict_flag=True)
                                 st.divider()
                                 decompose_time_series2(filtered_data, target_column, date_column)
                                 st.divider()
-                                csv = combined_data(index=False)
+                                csv = combined_data.to_csv(index=False)
                                 st.download_button(
                                     label="Download data as CSV",
                                     data=csv,
