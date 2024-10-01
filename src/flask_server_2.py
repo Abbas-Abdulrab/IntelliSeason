@@ -353,6 +353,11 @@ def run_arima_plus():
         """
         forecast_df = client.query(forecast_query).to_dataframe()
 
+        # Delete the ARIMA Plus model after forecasting
+        delete_model_query = f"DROP MODEL `{PROJECT_ID}.{DATA_SET_ID}.arima_plus_model`"
+        client.query(delete_model_query).result()
+
+
         # Return forecast results as JSON
         return jsonify(forecast_df.to_dict(orient='records'))
     
@@ -415,6 +420,10 @@ def run_arima():
             ML.FORECAST(MODEL `{PROJECT_ID}.{DATA_SET_ID}.arima_model`, STRUCT({forecast_period} AS horizon));
         """
         forecast_df = client.query(forecast_query).to_dataframe()
+
+        # Delete the ARIMA model after forecasting
+        delete_model_query = f"DROP MODEL `{PROJECT_ID}.{DATA_SET_ID}.arima_model`"
+        client.query(delete_model_query).result()
 
         # Return forecast results as JSON
         return jsonify(forecast_df.to_dict(orient='records'))
