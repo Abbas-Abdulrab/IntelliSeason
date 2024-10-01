@@ -904,7 +904,6 @@ def run_times_fm():
 def run_auto_ml():
     st.subheader("AutoML")
     specific_dir = os.path.join(os.getcwd(), 'uploads')
-    uploaded_file = None
     uploaded_file = st.file_uploader("Choose a CSV file", type="csv", key="auto_forecast_file_uploader")
     
     if not os.path.exists(specific_dir):
@@ -918,13 +917,14 @@ def run_auto_ml():
             date_column = st.selectbox("Select date column", [None] + list(df.columns), key="auto_forecast_date_column")
             target_column = st.selectbox("Select column to forecast", [None] + list(df.columns), key="auto_forecast_target_column")
             time_series_identifier = st.selectbox("Select time series identifier", [None] + list(df.columns), key="auto_forecast_time_series_identifier")
-            period = st.number_input("Forecast Period (days)", min_value=1, value=30, key="auto_forecast_period")
+            # period = st.number_input("Forecast Period (days)", min_value=1, value=30, key="auto_forecast_period")
             
             cleaned_file_path = os.path.join(specific_dir, f"cleaned_{uploaded_file.name}")
             
             if st.button('Start AutoML Training'):
-                with st.spinner('Training in progress... This may take up to 2.5 hours depending on the data . You will be notified by email once training is complete.'):
+                with st.spinner('Training in progress... This may take up to 2.5 hours depending on the data. You will be notified by email once training is complete.'):
                     
+                    # Clean column names and parse date column
                     df.columns = df.columns.str.replace(' ', '_').str.replace(r'\(.*?\)', '', regex=True)
                     df[date_column] = df[date_column].apply(parse_date)
                     df = df.dropna(subset=[date_column])
@@ -934,26 +934,24 @@ def run_auto_ml():
                     data = {
                         'file_path': cleaned_file_path,
                         'target_column': target_column,
-                        'period': period,
                         'date_column': date_column,
                         'time_series_identifier': time_series_identifier
                     }
 
-                    response = requests.post('http://127.0.0.1:5000/automl', data=data)
+                    try:
+                        # Try making the request to the Flask server
+                        response = requests.post('http://127.0.0.1:5000/automl', data=data)
+                        if response.status_code == 200:
+                            st.success("Model finished training successfully")
+                            response_data = response.json()
+                            model_display_name = response_data.get("model_display_name")
 
-                    if response.status_code == 200:
-                        st.success("Model finished training successfully")
-                        response_data = response.json()
-                        model_display_name = response_data.get("model_display_name")
-                        data = {
-                            'table_name': model_display_name,
-                            'target_column': target_column,
-                            'period': period,
-                            'date_column': date_column,
-                            'time_series_identifier': time_series_identifier
-                        }
-                        
-                        st.write("Fetching forecast data... you can deploy it and use it from History Page")
+                            st.write(f"Model {model_display_name} has been trained. You can deploy it and use it from the History Page.")
+                        else:
+                            st.error(f"Failed to start AutoML: {response.text}")
+                    except requests.ConnectionError:
+                        # Handle connection error and show the custom message
+                        st.warning("The model is training and will take a few hours to complete. You will receive an email once it's done.")
 
 
 def fetch_get_data_from_flask(endpoint):
