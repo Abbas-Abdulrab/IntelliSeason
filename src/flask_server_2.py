@@ -84,6 +84,11 @@ def get_or_refresh_token():
 
 @app.route('/')
 def index():
+    return render_template('index.html')
+
+
+@app.route('/login')
+def login():
     google = OAuth2Session(client_id, redirect_uri=redirect_uri, scope=scope)
     
     authorization_url, state = google.authorization_url(authorization_base_url, access_type="offline")

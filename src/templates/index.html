@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IntelliSeason - Welcome</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <img src="{{ url_for('static', filename='logo.png') }}" alt="Omantel Logo">
+        </div>
+        
+        <h1>Welcome to IntelliSeason</h1>
+        <h2>Your Seasonal Insights, Powered by Omantel!</h2>
+        
+        <p>If you’re new to our platform, please sign up to unlock a wealth of seasonal insights. If you already have an account, simply log in to continue your journey with us.</p>
+        
+        <div class="button-container">
+            <a href="/login" class="btn">Login</a>
+            <a href="https://docs.google.com/forms/d/e/1FAIpQLSfxrWnmynMWlUZNYdguiHViOV7Ca8yImWQbCQDHqgBgQYsDrQ/viewform" class="btn">Signup</a>
+        </div>
+        
+        <!-- Add some spacing here -->
+        <div class="important-section">
+            <h3>Important: Create a Gmail Account Before Signing Up</h3>
+            <p>Before you can sign up for IntelliSeason, you need to have a Gmail account using your Omantel ID. If you don’t have one, please follow these steps:</p>
+            <ol>
+                <li>Go to the <a href="https://accounts.google.com/">Google Account sign-in page</a>.</li>
+                <li>Click on <strong>'Create account'</strong> and select <strong>'For myself.'</strong></li>
+                <li>Choose the option to <strong>'Use your existing email.'</strong></li>
+                <li>Follow the prompts to complete the account creation process.</li>
+            </ol>
+            <h3>Sign in to IntelliSeason using your Gmail account:</h3>
+            <ol>
+                <li>Go to the IntelliSeason sign-in page.</li>
+                <li>Select the option to <strong>'Signup.'</strong></li>
+            </ol>
+        </div>
+        
+        <div class="footer">
+            © 2024 Omantel. All rights reserved.
+        </div>
+    </div>
+</body>
+</html>
