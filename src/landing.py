@@ -111,7 +111,7 @@ def is_flask_server_running(url="http://localhost:5000"):
 # Function to start the Flask server
 def start_flask_server():
     # Run flask_server2.py in a separate process on port 5000
-    subprocess.Popen(["python3.11", "flask_server_2.py"])
+    subprocess.Popen(["python", "flask_server_2.py"])
 
 # Center the buttons using a div container
 st.markdown('<div class="center-container">', unsafe_allow_html=True)
