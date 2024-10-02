@@ -27,7 +27,7 @@ This project is a Python 3-based API for time series forecasting using Google Cl
 `pip install -r requirements.txt`
 
 ## Start the API:
-`python flask_server2.py`
+`streamlit run landing.py --server.port 8502`
 
 ## Upload a Dataset:
 Interact with the streamlit UI to upload csv to model.
