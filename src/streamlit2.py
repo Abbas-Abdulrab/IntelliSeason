@@ -32,6 +32,15 @@ def main():
     if selected == "Model Library":
         st.title("Forecasting Model Library")
 
+        # New subheader and download button for User Guide
+        with open('IntelliSeason_New_Guide.pdf', 'rb') as f:
+            st.download_button(
+                label="Download User Guide",
+                data=f,
+                file_name="user_guide.pdf",
+                mime="application/pdf"
+            )
+
 
         models = {
             "AutoML": """AutoML from Vertex AI is great for working with various types of customer and network data. 
