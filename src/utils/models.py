@@ -227,32 +227,19 @@ def decompose_time_series2(df, column, date_column):
         seasonal_plot.update_layout(xaxis_title=freq_name, yaxis_title='Seasonal')
         st.plotly_chart(seasonal_plot, use_container_width=True)
 
-def calculate_accuracy(y_true, y_pred, flag=None):
+def calculate_accuracy(y_true, y_pred,flag=None):
     """Calculates and returns common accuracy metrics."""
-    
-    # Clip y_true values to avoid division by zero or near-zero values for MAPE calculation
-    y_true_clipped = np.clip(y_true, 1e-9, None)
-    
     if flag:
-        # Calculate MAPE with clipped y_true values
-        mape = np.mean(np.abs((y_true_clipped - y_pred) / y_true_clipped))
-        accuracy = 100 - (mape * 100)  # Accuracy formula: 100% - MAPE
-        
-        # Ensure accuracy does not exceed 100%
-        accuracy = np.clip(accuracy, 0, 100)
-        
+        mape = mean_absolute_percentage_error(y_true, y_pred)
+        accuracy = np.abs(100 - (mape * 100))
         st.session_state.accuracy = accuracy
         st.subheader(f"Forecast Accuracy: {accuracy:.2f}%")
     else:
-        # Calculate R^2 score (which ranges from -∞ to 1)
         r2 = r2_score(y_true, y_pred)
         st.session_state.accuracy = r2 * 100
-        
-        # Cap accuracy at 100% and ensure no negative percentage is shown
-        st.session_state.accuracy = np.clip(st.session_state.accuracy, 0, 100)
-        
         st.subheader(f"Forecast Accuracy: {st.session_state.accuracy:.2f}%")
-        
+
+
 def plot_forecast(train_df, test_df, forecast_df, date_column, target_column,forecast_horizon=None,  predict_flag=False, is_go=False):
     """Plots the forecast vs. actual using Altair and Matplotlib in separate plots."""
     """Plots the forecast vs. actual using Altair and Matplotlib in separate plots."""
@@ -716,8 +703,9 @@ def run_arima_model():
                         """
                         st.write(nav_script, unsafe_allow_html=True)
 
-
+                        
 def run_times_fm():
+
     global_times_fm_model_response = None
     st.title("Time Series Forecasting with TimesFM")
     times_fm_uploaded_file = None
@@ -734,9 +722,6 @@ def run_times_fm():
         times_fm_actual_column = st.selectbox('Select Target Value Column', [None] + list(times_fm_columns))
         time_series_id_col = st.selectbox("Select the time series ID column (optional)", [None] + times_fm_columns, key="times_fm_series_id_column")
         
-        # Optional regressor column
-        times_fm_regressor_column = st.selectbox("Select Regressor Column (optional)", [None] + list(times_fm_columns))
-
         if times_fm_date_column and times_fm_actual_column:
             if time_series_id_col:
                 unique_values = times_fm_df_actual[time_series_id_col].unique()
@@ -744,21 +729,16 @@ def run_times_fm():
                 times_fm_df_actual = times_fm_df_actual[times_fm_df_actual[time_series_id_col] == selected_value]
 
             # Date parsing
+            # times_fm_df_actual[times_fm_date_column] = pd.to_datetime(times_fm_df_actual[times_fm_date_column], errors='coerce')#format='%d/%m/%Y')
             times_fm_df_actual[times_fm_date_column] = times_fm_df_actual[times_fm_date_column].apply(parse_date)
             if times_fm_df_actual[times_fm_date_column].duplicated().any():
                 times_fm_df_actual[times_fm_date_column] = times_fm_df_actual[times_fm_date_column].dt.date
 
-                # Define the columns to sum
-                sum_columns = [times_fm_actual_column]
-                if times_fm_regressor_column:
-                    sum_columns.append(times_fm_regressor_column)
-
-                # Group by the date and sum the target and regressor values
-                times_fm_df_actual = times_fm_df_actual.groupby(times_fm_date_column, as_index=False)[sum_columns].sum()
+                # Group by the date and sum the target values
+                times_fm_df_actual = times_fm_df_actual.groupby(times_fm_date_column, as_index=False)[times_fm_actual_column].sum()
 
             times_fm_df_actual.sort_values(by=[times_fm_date_column], inplace=True)
-            
-            # Checking for missing dates
+            # Check if data is in daily form
             min_date = times_fm_df_actual[times_fm_date_column].min()
             max_date = times_fm_df_actual[times_fm_date_column].max()
             expected_dates = pd.date_range(start=min_date, end=max_date, freq='D')
@@ -772,6 +752,7 @@ def run_times_fm():
                 return
             else:
                 # Proceed with TimesFM training
+                # Convert target column to numeric
                 times_fm_df_actual[times_fm_actual_column] = pd.to_numeric(times_fm_df_actual[times_fm_actual_column], errors='coerce')
                 times_fm_df_actual.dropna(subset=[times_fm_actual_column], inplace=True)
 
@@ -779,20 +760,24 @@ def run_times_fm():
                 times_fm_df_actual.set_index(times_fm_date_column, inplace=True)
 
                 # Ensure the data has a daily frequency
-                times_fm_df_actual = times_fm_df_actual.asfreq('D').fillna(method='ffill')
+                times_fm_df_actual = times_fm_df_actual.asfreq('D')
+                times_fm_df_actual = times_fm_df_actual.fillna(method='ffill')  # Forward fill missing values
 
                 # Reset index
                 times_fm_df_actual.reset_index(inplace=True)
 
                 # Allow user to specify forecast horizon
-                forecast_horizon = st.number_input("Enter the forecast horizon (number of periods to predict beyond test data):", min_value=1, max_value=256, value=30)
+                forecast_horizon = st.number_input("Enter the forecast horizon (number of periods):", min_value=1, max_value=256, value=30)
 
-                # Set test size as 20% of the dataset
-                test_size = max(1, int(0.2 * len(times_fm_df_actual)))
+                # Set test size as 10% of the dataset
+                test_size = max(1, int(0.1 * len(times_fm_df_actual)))
+
+                # Update the forecast horizon to be horizon + test_size
+                forecast_horizon += test_size
 
                 # Check dataset length
-                if len(times_fm_df_actual) < 2 * test_size:
-                    st.warning("Dataset is too short for the specified test size and forecast horizon.")
+                if len(times_fm_df_actual) < 2 * forecast_horizon:
+                    st.warning("Dataset is too short for the specified forecast horizon.")
                     return
 
                 # Split into train and test sets
@@ -802,23 +787,16 @@ def run_times_fm():
                 if st.button('Start TimesFM Training'):
                     # Convert DataFrame to CSV buffer
                     relevant_columns = [times_fm_date_column, times_fm_actual_column]
-                    if times_fm_regressor_column:
-                        relevant_columns.append(times_fm_regressor_column)
-
                     times_fm_train_csv_buffer = StringIO()
                     train_df[relevant_columns].to_csv(times_fm_train_csv_buffer, index=False, lineterminator='\n')
                     times_fm_train_csv_buffer.seek(0)
 
                     # Send training data to the model
-                    model_payload = {
+                    response = requests.post('http://localhost:5000/model', json={
                         'csv_data': times_fm_train_csv_buffer.getvalue(),
                         'date_column': times_fm_date_column,
-                        'target_column': times_fm_actual_column,
-                    }
-                    if times_fm_regressor_column:
-                        model_payload['regressor_column'] = times_fm_regressor_column
-
-                    response = requests.post('http://localhost:5000/model', json=model_payload)
+                        'target_column': times_fm_actual_column
+                    })
 
                     if response.status_code == 200:
                         st.success("TimesFM Model run completed. Fetching results...")
@@ -834,22 +812,11 @@ def run_times_fm():
                         else:
                             st.error("Failed to fetch TimesFM model response.")
                             return
-                    
-                    elif response.status_code == 401:
-                        error_message = response.json().get('error', 'Unauthorized access. Please login again.')
-                        st.error(error_message)
-                        # Redirect to login page if 401 error occurs
-                        nav_script = """
-                            <meta http-equiv="refresh" content="0; url='http://localhost:5000'">
-                        """
-                        st.markdown(nav_script, unsafe_allow_html=True)
-                    
                     else:
                         st.error("Failed to send data to the model.")
                         return
-
                     if global_times_fm_model_response:
-                        forecasts = []
+                        mean_forecasts = []
 
                         # Loop over each response (chunk of predictions)
                         for chunk_index, response_data in enumerate(global_times_fm_model_response):
@@ -857,40 +824,52 @@ def run_times_fm():
                             
                             if predictions:
                                 for forecast in predictions:
-                                    # Extract p50 from the forecast
-                                    p50 = forecast.get('p70', [])
-                                    
-                                    # Add p50 (median) as the forecast value
-                                    df_p50 = pd.DataFrame(p50, columns=[f'Forecast for Chunk {chunk_index}'])
+                                    # Extract p10, p20, ..., p90 from the forecast
+                                    p10 = forecast.get('p10', [])
+                                    p20 = forecast.get('p20', [])
+                                    p30 = forecast.get('p30', [])
+                                    p40 = forecast.get('p40', [])
+                                    p50 = forecast.get('p50', [])
+                                    p60 = forecast.get('p60', [])
+                                    p70 = forecast.get('p70', [])
+                                    p80 = forecast.get('p80', [])
+                                    p90 = forecast.get('p90', [])
+
+                                    # For each index (0 to 256), calculate the mean of p10, p20, ..., p90
+                                    # Assuming each p10, p20, etc. has the same length
+                                    mean_forecast = []
+                                    for i in range(len(p10)):  # or any of p10, p20, etc. since their lengths should be the same
+                                        mean_value = np.mean([p10[i], p20[i], p30[i], p40[i], p50[i], p60[i], p70[i], p80[i], p90[i]])
+                                        mean_forecast.append(mean_value)
+
+                                    # Convert the mean_forecast list to a DataFrame for consistency
+                                    df_mean = pd.DataFrame(mean_forecast, columns=[f'Mean Forecast for Chunk {chunk_index}'])
 
                                     # Append the DataFrame to the list
-                                    forecasts.append(df_p50)
-
-                        if forecasts:
-                            # Concatenate all p50 forecasts across all chunks
-                            forecasts = pd.concat(forecasts, axis=1, ignore_index=True)
-                            df_point = forecasts
+                                    
+                                    mean_forecasts.append(df_mean)
                             
-                            # Set the date range for the forecast (start from the beginning of the test set and extend beyond)
-                            start_date = test_df[times_fm_date_column].min()  # Forecast starts from the beginning of test data
-                            end_date = start_date + timedelta(days=forecast_horizon + test_size - 1)  # Extend by forecast horizon
+
+                        if mean_forecasts:
+                            
+                            # Concatenate all mean forecasts across all chunks
+                            mean_forecasts = pd.concat(mean_forecasts, axis=1, ignore_index=True)
+                            df_point = mean_forecasts
+                            # Display the final DataFrame containing the combined mean forecasts
+                            start_date = train_df[times_fm_date_column].max() + timedelta(days=1)
+                            test_days = 256
+                            end_date = start_date + timedelta(days=test_days - 1)
                             date_range = pd.date_range(start=start_date, end=end_date, periods=len(df_point))
-
-                            df_point[times_fm_date_column] = date_range
-
-                            # Rename the value column
-                            df_point.columns.values[-2] = 'value'
                             
+                            df_point[times_fm_date_column] = date_range
+                            
+                            df_point.columns.values[-2] = 'value'
                             st.subheader("Forecast DataFrame:")
                             st.dataframe(df_point[[times_fm_date_column, 'value']], use_container_width=True)
                             forecast_results = df_point[[times_fm_date_column, 'value']]
-
-                            # Ensure the forecasted values aren't flat
-                            if df_point['value'].nunique() == 1:
-                                st.error("The forecasted values appear to be flat. Ensure variability in your model training data.")
-
+                            
                             times_fm_df_actual[times_fm_date_column] = pd.to_datetime(times_fm_df_actual[times_fm_date_column])
-
+                            # times_fm_df_actual.set_index('date', inplace=True)
                             st.divider()
                             plot_forecast(train_df, test_df, df_point, times_fm_date_column, times_fm_actual_column, is_go=True)
                             
@@ -899,7 +878,6 @@ def run_times_fm():
                             aligned_df = pd.merge(test_df, df_point, on=times_fm_date_column, how='inner')
                             actual_values = aligned_df[times_fm_actual_column].values
                             predicted_values = aligned_df['value'].values
-
                             # Remove NaNs from actual_values and predicted_values
                             mask = (~np.isnan(actual_values)) & (~np.isnan(predicted_values))
                             actual_values = actual_values[mask]
@@ -909,10 +887,11 @@ def run_times_fm():
                                 st.error("No valid data points for accuracy calculation after removing NaNs.")
                             else:
                                 calculate_accuracy(actual_values, predicted_values, flag=True)
-
+                            # calculate_accuracy(test_df[times_fm_actual_column].values, df_point['value'].values, flag=True)
                             st.divider()
                             decompose_time_series2(times_fm_df_actual, times_fm_actual_column, times_fm_date_column)
-
+                            
+                    
                             st.divider()
                             csv = forecast_results.to_csv(index=False)
                             st.download_button(
@@ -921,9 +900,11 @@ def run_times_fm():
                                 file_name='predictions.csv',
                                 mime='text/csv'
                             )
+
 def run_auto_ml():
     st.subheader("AutoML")
     specific_dir = os.path.join(os.getcwd(), 'uploads')
+    uploaded_file = None
     uploaded_file = st.file_uploader("Choose a CSV file", type="csv", key="auto_forecast_file_uploader")
     
     if not os.path.exists(specific_dir):
@@ -937,14 +918,13 @@ def run_auto_ml():
             date_column = st.selectbox("Select date column", [None] + list(df.columns), key="auto_forecast_date_column")
             target_column = st.selectbox("Select column to forecast", [None] + list(df.columns), key="auto_forecast_target_column")
             time_series_identifier = st.selectbox("Select time series identifier", [None] + list(df.columns), key="auto_forecast_time_series_identifier")
-            # period = st.number_input("Forecast Period (days)", min_value=1, value=30, key="auto_forecast_period")
+            period = st.number_input("Forecast Period (days)", min_value=1, value=30, key="auto_forecast_period")
             
             cleaned_file_path = os.path.join(specific_dir, f"cleaned_{uploaded_file.name}")
             
             if st.button('Start AutoML Training'):
-                with st.spinner('Training in progress... This may take up to 2.5 hours depending on the data. You will be notified by email once training is complete.'):
+                with st.spinner('Training in progress... This may take up to 2.5 hours depending on the data . You will be notified by email once training is complete.'):
                     
-                    # Clean column names and parse date column
                     df.columns = df.columns.str.replace(' ', '_').str.replace(r'\(.*?\)', '', regex=True)
                     df[date_column] = df[date_column].apply(parse_date)
                     df = df.dropna(subset=[date_column])
@@ -954,24 +934,26 @@ def run_auto_ml():
                     data = {
                         'file_path': cleaned_file_path,
                         'target_column': target_column,
+                        'period': period,
                         'date_column': date_column,
                         'time_series_identifier': time_series_identifier
                     }
 
-                    try:
-                        # Try making the request to the Flask server
-                        response = requests.post('http://127.0.0.1:5000/automl', data=data)
-                        if response.status_code == 200:
-                            st.success("Model finished training successfully")
-                            response_data = response.json()
-                            model_display_name = response_data.get("model_display_name")
+                    response = requests.post('http://127.0.0.1:5000/automl', data=data)
 
-                            st.write(f"Model {model_display_name} has been trained. You can deploy it and use it from the History Page.")
-                        else:
-                            st.error(f"Failed to start AutoML: {response.text}")
-                    except requests.ConnectionError:
-                        # Handle connection error and show the custom message
-                        st.warning("The model is training and will take a few hours to complete. You will receive an email once it's done.")
+                    if response.status_code == 200:
+                        st.success("Model finished training successfully")
+                        response_data = response.json()
+                        model_display_name = response_data.get("model_display_name")
+                        data = {
+                            'table_name': model_display_name,
+                            'target_column': target_column,
+                            'period': period,
+                            'date_column': date_column,
+                            'time_series_identifier': time_series_identifier
+                        }
+                        
+                        st.write("Fetching forecast data... you can deploy it and use it from History Page")
 
 
 def fetch_get_data_from_flask(endpoint):
@@ -1473,8 +1455,8 @@ def run_prophet_training():
         st.dataframe(df.head())
 
         # Input fields for target, date, and identifier columns
-        target_column = st.selectbox("Select the Target Column", df.columns)
         date_column = st.selectbox("Select the Date Column", df.columns)
+        target_column = st.selectbox("Select the Target Column", df.columns)
         identifier_column = st.selectbox("Select the Identifier Column", df.columns)
 
         # Input for forecast horizon (make it dynamic)
@@ -1486,50 +1468,55 @@ def run_prophet_training():
             col for col in df.columns if col not in[identifier_column]]
 
         if st.button("Upload to BigQuery and Start Training"):
-            # Convert the DataFrame to CSV and send it to the Flask app
-            csv_data = df.to_csv(index=False)
+            with st.spinner('Training in progress... This may take up to 2 hours depending on the data. You will be notified by email once the training is complete.'):
+                # Convert the DataFrame to CSV and send it to the Flask app
+                csv_data = df.to_csv(index=False)
 
-            # Prepare the payload for the data upload
-            upload_payload = {
-                "csv_data": csv_data,
-                "date_column": date_column,
-                "identifier_column": identifier_column,
-            }
-
-            # Step 1: Upload the data to BigQuery
-            upload_response = requests.post(f'{FLASK_SERVER_URL}/upload_data_prophet', json=upload_payload)
-
-            if upload_response.status_code == 200:
-                st.success("Data uploaded to BigQuery successfully!")
-                
-                # Retrieve the table name from the upload response
-                table_name = upload_response.json().get("table_name")
-
-                if not table_name:
-                    st.error("Failed to retrieve table name after data upload.")
-                    st.stop()
-
-                # Prepare the payload for processing and training
-                process_payload = {
-                    "table_name": table_name,
-                    "target_column": target_column,
+                # Prepare the payload for the data upload
+                upload_payload = {
+                    "csv_data": csv_data,
                     "date_column": date_column,
                     "identifier_column": identifier_column,
-                    "forecast_horizon": int(forecast_horizon),
-                    "feature_names": feature_names,
                 }
 
-                # Step 2: Start the processing and training pipeline
-                process_response = requests.post(f'{FLASK_SERVER_URL}/process_and_train', json=process_payload)
+                # Step 1: Upload the data to BigQuery
+                upload_response = requests.post(f'{FLASK_SERVER_URL}/upload_data_prophet', json=upload_payload)
 
-                if process_response.status_code == 200:
-                    st.success("Training pipeline started successfully!")
-                    st.write("Job ID:", process_response.json().get("job_id"))
+                if upload_response.status_code == 200:
+                    st.success("Data uploaded to BigQuery successfully!")
+                    
+                    # Retrieve the table name from the upload response
+                    table_name = upload_response.json().get("table_name")
+
+                    if not table_name:
+                        st.error("Failed to retrieve table name after data upload.")
+                        st.stop()
+
+                    # Prepare the payload for processing and training
+                    process_payload = {
+                        "table_name": table_name,
+                        "target_column": target_column,
+                        "date_column": date_column,
+                        "identifier_column": identifier_column,
+                        "forecast_horizon": int(forecast_horizon),
+                        "feature_names": feature_names,
+                    }
+
+                    # Step 2: Start the processing and training pipeline
+                    try:
+                        process_response = requests.post(f'{FLASK_SERVER_URL}/process_and_train', json=process_payload)
+
+                        if process_response.status_code == 200:
+                            st.success("Training pipeline completed!")
+                            st.write("Job ID:", process_response.json().get("job_id"))
+                        else:
+                            st.error(f"Training pipeline: {process_response.text}")
+                    except requests.ConnectionError:
+                            # Handle connection error and show the custom message
+                            st.warning("The model is training and will take a few hours to complete. You will receive an email once it's done.")
+
                 else:
-                    st.error(f"Failed to start the training pipeline: {process_response.text}")
-
-            else:
-                st.error(f"Failed to upload data to BigQuery: {upload_response.text}")
+                    st.error(f"Failed to upload data to BigQuery: {upload_response.text}")
 
 
 
@@ -1552,8 +1539,8 @@ def run_prophet_batch_predictions(model_name):
         st.dataframe(df.head())
 
         # Input fields for target, date, and identifier columns
-        target_column = st.selectbox("Select the Target Column", df.columns)
         date_column = st.selectbox("Select the Date Column", df.columns)
+        target_column = st.selectbox("Select the Target Column", df.columns)
         identifier_column = st.selectbox("Select the Identifier Column", df.columns)
 
         # Input for forecast horizon (make it dynamic)
