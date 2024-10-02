@@ -95,7 +95,7 @@ def index():
 
 @app.route('/streamlit')
 def streamlit_app():
-    return redirect("http://localhost:8501")
+    return redirect(os.environ.get('STREAMLIT_APP_URL'))
 
 @app.route('/callback')
 def callback():
@@ -120,13 +120,13 @@ def callback():
     }
 
     # Only start Streamlit if it hasn't been started yet
-    if not streamlit_process or streamlit_process.poll() is not None:
-        env = os.environ.copy()
-        env['BROWSER'] = 'none'
-        streamlit_process = subprocess.Popen(
-            ["streamlit", "run", "streamlit2.py", "--server.headless", "true"],
-            env=env
-        )
+    # if not streamlit_process or streamlit_process.poll() is not None:
+    #     env = os.environ.copy()
+    #     env['BROWSER'] = 'none'
+    #     streamlit_process = subprocess.Popen(
+    #         ["streamlit", "run", "streamlit_app.py", "--server.headless", "true"],
+    #         env=env
+    #     )
 
     return redirect("/streamlit")
 

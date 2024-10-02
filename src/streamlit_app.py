@@ -1,9 +1,6 @@
 import streamlit as st
-import pandas as pd
-from streamlit.components.v1 import iframe
 from streamlit_option_menu import option_menu
-from flask_server_2 import app
-import matplotlib.pyplot as plt
+import streamlit.web.bootstrap
 import re
 import requests
 from utils.models import run_arima_model, run_arima_plus_model, run_times_fm, run_auto_ml
