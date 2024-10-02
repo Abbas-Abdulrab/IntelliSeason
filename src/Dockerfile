@@ -6,6 +6,6 @@ COPY . .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-EXPOSE 8080 8501
+EXPOSE 5000 8501
 
 CMD ["python", "flask_server_2.py"]

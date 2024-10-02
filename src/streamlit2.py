@@ -111,7 +111,7 @@ def main():
                         display_name = strip_user_id(model["display_name"])
                         with st.expander(display_name):
                             st.write("**Status:** Not Deployed")
-                            if st.button(f"Deploy {display_name}", key=f"deploy_{model["display_name"]}"):
+                            if st.button(f"Deploy {display_name}", key=f"deploy_{model['display_name']}"):
                                 st.session_state.model_choice = model['display_name']
                                 st.session_state.action = "deploy"
             elif models_response.status_code == 401:
@@ -138,11 +138,11 @@ def main():
                         with st.expander(display_name):
                             col1, col2 = st.columns(2)
                             with col1:
-                                if st.button(f"Delete {display_name}", key=f"delete_{endpoint["display_name"]}"):
+                                if st.button(f"Delete {display_name}", key=f"delete_{endpoint['display_name']}"):
                                     st.session_state.action = "delete"
                                     st.session_state.endpoint_choice = endpoint['display_name']
                             with col2:
-                                if st.button(f"Predict with {display_name}", key=f"predict_{endpoint["display_name"]}"):
+                                if st.button(f"Predict with {display_name}", key=f"predict_{endpoint['display_name']}"):
                                     st.session_state.action = "predict"
                                     st.session_state.endpoint_choice = endpoint['display_name']
             elif endpoints_response.status_code == 401:
