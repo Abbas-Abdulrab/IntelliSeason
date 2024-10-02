@@ -4,7 +4,7 @@ services:
   flask_app:
     build:
       context: .
-      dockerfile: docker_files/FlaskDockerfile
+      dockerfile: FlaskDockerfile
     image: ziyadabd/intelli-season-flask-app:1.0.0
     container_name: flask-app-cont
     ports:
@@ -17,7 +17,7 @@ services:
   streamlit_app:
     build:
       context: .
-      dockerfile: docker_files/StreamlitDockerfile
+      dockerfile: StreamlitDockerfile
     image: ziyadabd/intelli-season-streamlit-app:1.0.0
     container_name: streamlit-app-cont
     ports:
