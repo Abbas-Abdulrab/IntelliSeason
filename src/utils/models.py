@@ -21,17 +21,17 @@ import re
 import math
 
 # API URLs
-LIST_MODELS_URL = 'http://localhost:5000/list_models'
-API_URL_PROPHET = 'http://localhost:5000/predict_prophet'
-LIST_ENDPOINTS_URL = 'http://localhost:5000/list_user_endpoints'
-DEPLOY_MODEL_URL = 'http://localhost:5000/deploy_model'
-DELETE_ENDPOINT_URL = 'http://localhost:5000/delete_endpoint'
-PREDICT_URL = 'http://localhost:5000/predict'
-COLUMNS_API_URL = 'http://localhost:5000/get_columns'
+LIST_MODELS_URL = 'https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om/list_models'
+API_URL_PROPHET = 'https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om/predict_prophet'
+LIST_ENDPOINTS_URL = 'https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om/list_user_endpoints'
+DEPLOY_MODEL_URL = 'https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om/deploy_model'
+DELETE_ENDPOINT_URL = 'https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om/delete_endpoint'
+PREDICT_URL = 'https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om/predict'
+COLUMNS_API_URL = 'https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om/get_columns'
 
 
 # URL of the Flask server
-FLASK_SERVER_URL = "http://localhost:5000"
+FLASK_SERVER_URL = "https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om"
 
 def parse_date(date_data):
     possible_formats = [
@@ -542,7 +542,7 @@ def run_arima_plus_model():
                         
                         # Redirect to the login page using JavaScript
                         nav_script = """
-                            <meta http-equiv="refresh" content="0; url='http://localhost:5000'">
+                            <meta http-equiv="refresh" content="0; url='https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om'">
                         """
                         st.write(nav_script, unsafe_allow_html=True)
 
@@ -704,7 +704,7 @@ def run_arima_model():
                             error_message = response.json().get('error')
                             st.error(error_message)
                             nav_script = """
-                                <meta http-equiv="refresh" content="0; url='http://localhost:5000'">
+                                <meta http-equiv="refresh" content="0; url='https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om'">
                             """
                             st.write(nav_script, unsafe_allow_html=True)
 
@@ -712,7 +712,7 @@ def run_arima_model():
                         error_message = response.json().get('error')
                         st.error(error_message)  # Show error message in Streamlit
                         nav_script = """
-                            <meta http-equiv="refresh" content="0; url='http://localhost:5000'">
+                            <meta http-equiv="refresh" content="0; url='https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om'">
                         """
                         st.write(nav_script, unsafe_allow_html=True)
 
@@ -818,11 +818,11 @@ def run_times_fm():
                     if times_fm_regressor_column:
                         model_payload['regressor_column'] = times_fm_regressor_column
 
-                    response = requests.post('http://localhost:5000/model', json=model_payload)
+                    response = requests.post('https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om/model', json=model_payload)
 
                     if response.status_code == 200:
                         st.success("TimesFM Model run completed. Fetching results...")
-                        response = requests.get('http://localhost:5000/get_model_response')
+                        response = requests.get('https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om/get_model_response')
 
                         if response.status_code == 200:
                             try:
@@ -840,7 +840,7 @@ def run_times_fm():
                         st.error(error_message)
                         # Redirect to login page if 401 error occurs
                         nav_script = """
-                            <meta http-equiv="refresh" content="0; url='http://localhost:5000'">
+                            <meta http-equiv="refresh" content="0; url='https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om'">
                         """
                         st.markdown(nav_script, unsafe_allow_html=True)
                     
@@ -1219,7 +1219,7 @@ def filter_and_prepare_data(data, date_column, target_column, selected_category=
 
 
 def endpoint_predict(selected_endpoint_id):
-    API_URL = 'http://localhost:5000/predict'
+    API_URL = 'https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om/predict'
     BATCH_SIZE_LIMIT = 1.4 * 1024 * 1024  # 1.4MB to stay safely under the 1.5MB limit
 
     st.title("Predictions")
@@ -1282,7 +1282,7 @@ def endpoint_predict(selected_endpoint_id):
 
                 # Handle predictions only if not already computed
                 if st.session_state.predictions is None:
-                    # st.session_state.predictions = handle_predictions(filtered_data, forecast_horizon, date_column, 'http://localhost:5000/predict', 1.4 * 1024 * 1024, selected_endpoint_id)
+                    # st.session_state.predictions = handle_predictions(filtered_data, forecast_horizon, date_column, 'https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om/predict', 1.4 * 1024 * 1024, selected_endpoint_id)
                     st.session_state.predictions  = predict_in_batches(filtered_data, API_URL, BATCH_SIZE_LIMIT, selected_endpoint_id, forecast_horizon, date_column)
                 filtered_data['Predicted'] = st.session_state.predictions
                 
@@ -1456,7 +1456,7 @@ def endpoint_predict(selected_endpoint_id):
 
 
 def run_prophet_training():
-    FLASK_SERVER_URL = 'http://localhost:5000'
+    FLASK_SERVER_URL = 'https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om'
 
     # Section 1: Upload CSV and specify columns
     st.title("Upload CSV and Train a Prophet Model")
@@ -1534,7 +1534,7 @@ def run_prophet_training():
 
 
 def run_prophet_batch_predictions(model_name):
-    FLASK_SERVER_URL = 'http://localhost:5000'
+    FLASK_SERVER_URL = 'https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om'
 
     # Section 1: Upload CSV and specify columns
     st.title("Upload CSV and Run Batch Predictions")
