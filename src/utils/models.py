@@ -489,7 +489,7 @@ def run_arima_plus_model():
                             'train_file_path': train_file_path,
                             'date_column': date_column
                         }
-                    )
+                    , verify=False)
                     if response.ok:
                         params = {
                             'date_column': date_column,
@@ -499,7 +499,7 @@ def run_arima_plus_model():
                         }
                         st.success("Data uploaded successfully.")
                         
-                        response = requests.get('https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om/run_arima_plus', params=params)
+                        response = requests.get('https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om/run_arima_plus', params=params, verify=False)
                         if response.ok:
                             forecast_df = pd.DataFrame(response.json())
 
@@ -657,7 +657,7 @@ def run_arima_model():
                             'train_file_path': train_file_path,
                             'date_column': date_column
                         }
-                    )
+                    , verify=False)
                     df.reset_index(drop=True, inplace=True)
                     if response.ok:
                         params = {
@@ -667,7 +667,7 @@ def run_arima_model():
                             'train_file_path': train_file_path
                         }
                         st.success("Data uploaded successfully.")
-                        response = requests.get('https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om/run_arima', params=params)
+                        response = requests.get('https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om/run_arima', params=params, verify=False)
                         if response.ok:
                             forecast_df = pd.DataFrame(response.json())
                             forecast_df = forecast_df.rename(columns={'forecast_timestamp': date_column, 'forecast_value': 'value'})
@@ -818,11 +818,11 @@ def run_times_fm():
                     if times_fm_regressor_column:
                         model_payload['regressor_column'] = times_fm_regressor_column
 
-                    response = requests.post('https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om/model', json=model_payload)
+                    response = requests.post('https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om/model', json=model_payload, verify=False)
 
                     if response.status_code == 200:
                         st.success("TimesFM Model run completed. Fetching results...")
-                        response = requests.get('https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om/get_model_response')
+                        response = requests.get('https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om/get_model_response', verify=False)
 
                         if response.status_code == 200:
                             try:
@@ -960,7 +960,7 @@ def run_auto_ml():
 
                     try:
                         # Try making the request to the Flask server
-                        response = requests.post('https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om/automl', data=data)
+                        response = requests.post('https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om/automl', data=data, verify=False)
                         if response.status_code == 200:
                             st.success("Model finished training successfully")
                             response_data = response.json()
@@ -976,7 +976,7 @@ def run_auto_ml():
 
 def fetch_get_data_from_flask(endpoint):
     try:
-        response = requests.get(f"{FLASK_SERVER_URL}/{endpoint}")
+        response = requests.get(f"{FLASK_SERVER_URL}/{endpoint}", verify=False)
         print(response)
         response.raise_for_status()
         return response.json()
@@ -988,7 +988,7 @@ def fetch_get_data_from_flask(endpoint):
 # Function to get required columns for an endpoint
 @st.cache_data
 def get_required_columns(endpoint_id):
-    response = requests.get(COLUMNS_API_URL, params={"endpoint_id": endpoint_id})
+    response = requests.get(COLUMNS_API_URL, params={"endpoint_id": endpoint_id}, verify=False)
     print(response)
     if response.status_code == 200:
         data = response.json()
@@ -1012,7 +1012,7 @@ def deploy_model(endpoint_name, model):
             response = requests.post(
                 DEPLOY_MODEL_URL,
                 json={"model_name": model['resource_name'], "endpoint_name": endpoint_name}
-            )
+            , verify=False)
             result = response.json()
             if response.status_code == 200:
                 st.success(f"Model deployed to {result['endpoint_display_name']}")
@@ -1024,7 +1024,7 @@ def delete_endpoint(endpoint):
         response = requests.post(
             DELETE_ENDPOINT_URL,
             json={"endpoint_name": endpoint['resource_name']}
-        )
+        , verify=False)
         result = response.json()
         if response.status_code == 200:
             st.success("Endpoint deleted successfully")
@@ -1068,7 +1068,7 @@ def predict_in_batches_prophet(
                         "endpoint_id": endpoint_id,
                         "forecast_horizon": forecast_horizon
                     }
-                )
+                , verify=False)
 
                 if batch_response.status_code == 200:
                     batch_predictions = batch_response.json().get('predictions', [])
@@ -1154,7 +1154,7 @@ def predict_in_batches(data, api_url, batch_size_limit, endpoint_id, forecast_ho
                 if isinstance(record[date], pd.Timestamp):
                     record[date] = record[date].strftime('%Y-%m-%d')
             # Send the POST request with the forecast horizon included
-            batch_response = requests.post(api_url, json={"data": batch_data, "endpoint_id": endpoint_id, "forecast_horizon": forecast_horizon})
+            batch_response = requests.post(api_url, json={"data": batch_data, "endpoint_id": endpoint_id, "forecast_horizon": forecast_horizon}, verify=False)
             if batch_response.status_code == 200:
                 batch_predictions = batch_response.json().get('predictions')
                 # st.write(batch_predictions)
@@ -1497,7 +1497,7 @@ def run_prophet_training():
             }
 
             # Step 1: Upload the data to BigQuery
-            upload_response = requests.post(f'{FLASK_SERVER_URL}/upload_data_prophet', json=upload_payload)
+            upload_response = requests.post(f'{FLASK_SERVER_URL}/upload_data_prophet', json=upload_payload, verify=False)
 
             if upload_response.status_code == 200:
                 st.success("Data uploaded to BigQuery successfully!")
@@ -1520,7 +1520,7 @@ def run_prophet_training():
                 }
 
                 # Step 2: Start the processing and training pipeline
-                process_response = requests.post(f'{FLASK_SERVER_URL}/process_and_train', json=process_payload)
+                process_response = requests.post(f'{FLASK_SERVER_URL}/process_and_train', json=process_payload, verify=False)
 
                 if process_response.status_code == 200:
                     st.success("Training pipeline started successfully!")
@@ -1576,7 +1576,7 @@ def run_prophet_batch_predictions(model_name):
             }
 
             # Step 1: Upload the data to BigQuery
-            upload_response = requests.post(f'{FLASK_SERVER_URL}/upload_data_prophet', json=upload_payload)
+            upload_response = requests.post(f'{FLASK_SERVER_URL}/upload_data_prophet', json=upload_payload, verify=False)
 
             if upload_response.status_code == 200:
                 st.success("Data uploaded to BigQuery successfully!")
@@ -1600,7 +1600,7 @@ def run_prophet_batch_predictions(model_name):
                 }
 
                 # Step 2: Start the processing and training pipeline
-                process_response = requests.post(f'{FLASK_SERVER_URL}/prophet_batch_predictions', json=process_payload)
+                process_response = requests.post(f'{FLASK_SERVER_URL}/prophet_batch_predictions', json=process_payload, verify=False)
 
                 if process_response.status_code == 200:
                     st.success("Prediction pipeline started successfully!")
@@ -1617,7 +1617,7 @@ def deploy_model(endpoint_name, model_resource_name):
         response = requests.post(f'{FLASK_SERVER_URL}/deploy_model', json={
             "model_name": model_resource_name, 
             "endpoint_name": endpoint_name
-        })
+        }, verify=False)
         
         if response.status_code == 200:
             try:

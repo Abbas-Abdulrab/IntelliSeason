@@ -146,7 +146,7 @@ def get_user_info():
         
     access_token = credentials.token
     headers = {'Authorization': f'Bearer {access_token}'}
-    userinfo_response = requests.get(user_info_url, headers=headers)
+    userinfo_response = requests.get(user_info_url, headers=headers, verify=False)
     return user_info
 # Function to handle date parsing
 def parse_date(date_series):
@@ -520,7 +520,7 @@ def model():
     global global_model_response
     global_model_response = []
     for payload in payloads:
-        response = requests.post(model_url, headers=headers, data=payload)
+        response = requests.post(model_url, headers=headers, data=payload, verify=False)
         if response.status_code == 200:
             global_model_response.append(response.json())
         else:
@@ -633,7 +633,7 @@ def predict_prophet():
     payload = {"instances": instances}
 
     try:
-        response = requests.post(endpoint_url, headers=headers, json=payload)
+        response = requests.post(endpoint_url, headers=headers, json=payload, verify=False)
         if response.status_code == 200:
             return jsonify(response.json())  # Return the model's prediction response
         else:
@@ -716,7 +716,7 @@ def deploy_model():
         # Call Google's UserInfo endpoint to get user information
         userinfo_endpoint = 'https://www.googleapis.com/oauth2/v1/userinfo'
         headers = {'Authorization': f'Bearer {access_token}'}
-        userinfo_response = requests.get(userinfo_endpoint, headers=headers)
+        userinfo_response = requests.get(userinfo_endpoint, headers=headers, verify=False)
 
         if userinfo_response.status_code != 200:
             return jsonify({"error": "Failed to fetch user information from token."}), 500
@@ -904,7 +904,7 @@ def list_endpoints():
         "Content-Type": "application/json"
     }
     
-    response = requests.get(url, headers=headers)
+    response = requests.get(url, headers=headers, verify=False)
     
     if response.status_code == 200:
         endpoints = response.json().get('endpoints', [])
@@ -946,7 +946,7 @@ def get_columns():
         "Content-Type": "application/json"
     }
     
-    response = requests.get(url, headers=headers)
+    response = requests.get(url, headers=headers, verify=False)
     
     if response.status_code == 200:
         deployed_models = response.json().get('deployedModels', [])
@@ -968,7 +968,7 @@ def get_columns():
         model_url = f'https://{LOCATION}-aiplatform.googleapis.com/v1/{model_id}'
         
         # Fetch model details to locate the labels
-        model_response = requests.get(model_url, headers=headers)
+        model_response = requests.get(model_url, headers=headers, verify=False)
         
         if model_response.status_code == 200:
             model_details = model_response.json()
@@ -1038,7 +1038,7 @@ def predict():
     }
     
     # Make the prediction request to GCP AI Platform
-    response = requests.post(endpoint_url, headers=headers, json={"instances": data})
+    response = requests.post(endpoint_url, headers=headers, json={"instances": data}, verify=False)
     
     if response.status_code == 200:
         return jsonify(response.json())
