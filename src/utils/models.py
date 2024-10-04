@@ -484,7 +484,7 @@ def run_arima_plus_model():
                 if st.button("Start ARIMA Plus Training"):
                     # Post training data to Flask API
                     response = requests.post(
-                        'http://127.0.0.1:5000/upload_data',
+                        'https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om/upload_data',
                         json={
                             'train_file_path': train_file_path,
                             'date_column': date_column
@@ -499,7 +499,7 @@ def run_arima_plus_model():
                         }
                         st.success("Data uploaded successfully.")
                         
-                        response = requests.get('http://127.0.0.1:5000/run_arima_plus', params=params)
+                        response = requests.get('https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om/run_arima_plus', params=params)
                         if response.ok:
                             forecast_df = pd.DataFrame(response.json())
 
@@ -652,7 +652,7 @@ def run_arima_model():
 
                 if st.button("Start ARIMA Training"):
                     response = requests.post(
-                        'http://127.0.0.1:5000/upload_data',
+                        'https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om/upload_data',
                         json={
                             'train_file_path': train_file_path,
                             'date_column': date_column
@@ -667,7 +667,7 @@ def run_arima_model():
                             'train_file_path': train_file_path
                         }
                         st.success("Data uploaded successfully.")
-                        response = requests.get('http://127.0.0.1:5000/run_arima', params=params)
+                        response = requests.get('https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om/run_arima', params=params)
                         if response.ok:
                             forecast_df = pd.DataFrame(response.json())
                             forecast_df = forecast_df.rename(columns={'forecast_timestamp': date_column, 'forecast_value': 'value'})
@@ -960,7 +960,7 @@ def run_auto_ml():
 
                     try:
                         # Try making the request to the Flask server
-                        response = requests.post('http://127.0.0.1:5000/automl', data=data)
+                        response = requests.post('https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om/automl', data=data)
                         if response.status_code == 200:
                             st.success("Model finished training successfully")
                             response_data = response.json()
