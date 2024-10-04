@@ -8,8 +8,8 @@ from utils.models import run_arima_model, run_arima_plus_model, run_times_fm, ru
 from utils.models import endpoint_predict, deploy_model, delete_endpoint, run_prophet_training
 
 # API URLs
-LIST_MODELS_URL = f'{os.environ.get('REDIRECT_URI')}/list_models'
-LIST_ENDPOINTS_URL = f'{os.environ.get('REDIRECT_URI')}/list_user_endpoints'
+LIST_MODELS_URL = 'https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om/list_models'
+LIST_ENDPOINTS_URL = 'https://intelliseason-flask-app-intelliseason.apps.ocptest.otg.om/list_user_endpoints'
 
 BATCH_SIZE_LIMIT = 1.4 * 1024 * 1024  # 1.4MB batch size limit
 
