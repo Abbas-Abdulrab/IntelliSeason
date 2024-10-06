@@ -145,13 +145,15 @@ def parse_dates(date_series):
     return results, fmt
 
 
-def decompose_time_series2(df, column, date_column):
+
+
+def decompose_time_series2(df, column, date_column, duplicated_flag=None):
     """Decomposes the time series for weekly, monthly, and yearly frequencies and plots trend and seasonality side by side."""
 
     # Ensure the data is sorted by date
     df = df.sort_values(by=date_column).copy()
-    
-    df[date_column] = df[date_column].dt.date
+    if not duplicated_flag:
+        df[date_column] = df[date_column].dt.date
     if df[date_column].duplicated().any():
         # Group by the date and sum the target values
         df = df.groupby(date_column, as_index=False)[column].sum()
@@ -227,16 +229,31 @@ def decompose_time_series2(df, column, date_column):
         seasonal_plot.update_layout(xaxis_title=freq_name, yaxis_title='Seasonal')
         st.plotly_chart(seasonal_plot, use_container_width=True)
 
-def calculate_accuracy(y_true, y_pred,flag=None):
+
+def calculate_accuracy(y_true, y_pred, flag=None):
     """Calculates and returns common accuracy metrics."""
+    
+    # Clip y_true values to avoid division by zero or near-zero values for MAPE calculation
+    y_true_clipped = np.clip(y_true, 1e-9, None)
+    
     if flag:
-        mape = mean_absolute_percentage_error(y_true, y_pred)
-        accuracy = np.abs(100 - (mape * 100))
+        # Calculate MAPE with clipped y_true values
+        mape = np.mean(np.abs((y_true_clipped - y_pred) / y_true_clipped))
+        accuracy = 100 - (mape * 100)  # Accuracy formula: 100% - MAPE
+        
+        # Ensure accuracy does not exceed 100%
+        accuracy = np.clip(accuracy, 0, 100)
+        
         st.session_state.accuracy = accuracy
         st.subheader(f"Forecast Accuracy: {accuracy:.2f}%")
     else:
+        # Calculate R^2 score (which ranges from -∞ to 1)
         r2 = r2_score(y_true, y_pred)
         st.session_state.accuracy = r2 * 100
+        
+        # Cap accuracy at 100% and ensure no negative percentage is shown
+        st.session_state.accuracy = np.clip(st.session_state.accuracy, 0, 100)
+        
         st.subheader(f"Forecast Accuracy: {st.session_state.accuracy:.2f}%")
 
 
@@ -378,12 +395,13 @@ def plot_actual_vs_predicted_combined(data, date_column, target_column, identifi
     )
     st.plotly_chart(fig, use_container_width=True)  # Return the figure
 
+
 def run_arima_plus_model():
     """Handles the forecasting with ARIMA_PLUS in BigQuery."""
     st.title("Time Series Forecasting with ARIMA_PLUS (BigQuery)")
     
     specific_dir = os.path.join(os.getcwd(), 'uploads')
-    
+    duplicated_flag = None
     if not os.path.exists(specific_dir):
         os.makedirs(specific_dir)
     arima_plus_uploaded_file = None
@@ -428,9 +446,9 @@ def run_arima_plus_model():
             
             # Handle hourly data by extracting only the date and grouping
             if df[date_column].duplicated().any():
+                duplicated_flag = True
                 df[date_column] = df[date_column].dt.date
                 df = df.groupby(date_column, as_index=False)[target_column].sum()
-
             # Check for gaps in the date range
             date_range = pd.date_range(start=df[date_column].min(), end=df[date_column].max())
             missing_dates = date_range[~date_range.isin(df[date_column])]
@@ -458,6 +476,7 @@ def run_arima_plus_model():
                     train_length = int(len(df) * adjusted_split_ratio)
                     test_length = len(df) - train_length
 
+                df = df[[date_column, target_column]]
                 # Split the data into training and test sets
                 train_df, test_df = df[:train_length], df[train_length:]
                 
@@ -512,7 +531,7 @@ def run_arima_plus_model():
                             y_pred = trimmed_forecast_df['value'].values
                             calculate_accuracy(y_true,y_pred, flag=True)
                             st.divider()
-                            decompose_time_series2(df, target_column, date_column)
+                            decompose_time_series2(df, target_column, date_column, duplicated_flag)
                             st.divider()
 
                             # Download forecast as CSV
@@ -523,6 +542,11 @@ def run_arima_plus_model():
                                 file_name='predictions.csv',
                                 mime='text/csv'
                             )
+
+                            # After the model finishes, delete the file from BigQuery and local directory
+                            requests.delete(f'http://127.0.0.1:5000/delete_bigquery_table', json={'train_file_path': train_file_path})
+                            os.remove(train_file_path)
+                            os.remove(clean_file_path)
                     elif response.status_code == 401:
                         error_message = response.json().get('error')
                         st.error(error_message)
@@ -539,7 +563,7 @@ def run_arima_model():
     st.title("Time Series Forecasting with ARIMA (BigQuery)")
 
     specific_dir = os.path.join(os.getcwd(), 'uploads')
-
+    duplicated_flag = None
     if not os.path.exists(specific_dir):
         os.makedirs(specific_dir)
     arima_uploaded_file = None
@@ -585,6 +609,7 @@ def run_arima_model():
 
             # Check for duplicates and handle them
             if df[date_column].duplicated().any():
+                duplicated_flag = True
                 df[date_column] = df[date_column].dt.date
                 df = df.groupby(date_column, as_index=False)[target_column].sum()
 
@@ -677,7 +702,7 @@ def run_arima_model():
 
                             # Plot results
                             st.divider()
-                            decompose_time_series2(df, target_column, date_column)
+                            decompose_time_series2(df, target_column, date_column, duplicated_flag)
                             st.divider()
                             csv = forecast_df.to_csv(index=False)
                             st.download_button(
@@ -686,6 +711,10 @@ def run_arima_model():
                                 file_name='predictions.csv',
                                 mime='text/csv'
                             )
+                            # After the model finishes, delete the file from BigQuery and local directory
+                            requests.delete(f'http://127.0.0.1:5000/delete_bigquery_table', json={'train_file_path': train_file_path})
+                            os.remove(train_file_path)
+                            os.remove(clean_file_path)
 
                         elif response.status_code == 401:
                             error_message = response.json().get('error')
@@ -705,7 +734,7 @@ def run_arima_model():
 
                         
 def run_times_fm():
-
+    duplicated_flag = None
     global_times_fm_model_response = None
     st.title("Time Series Forecasting with TimesFM")
     times_fm_uploaded_file = None
@@ -732,6 +761,7 @@ def run_times_fm():
             # times_fm_df_actual[times_fm_date_column] = pd.to_datetime(times_fm_df_actual[times_fm_date_column], errors='coerce')#format='%d/%m/%Y')
             times_fm_df_actual[times_fm_date_column] = times_fm_df_actual[times_fm_date_column].apply(parse_date)
             if times_fm_df_actual[times_fm_date_column].duplicated().any():
+                duplicated_flag = True
                 times_fm_df_actual[times_fm_date_column] = times_fm_df_actual[times_fm_date_column].dt.date
 
                 # Group by the date and sum the target values
@@ -889,7 +919,7 @@ def run_times_fm():
                                 calculate_accuracy(actual_values, predicted_values, flag=True)
                             # calculate_accuracy(test_df[times_fm_actual_column].values, df_point['value'].values, flag=True)
                             st.divider()
-                            decompose_time_series2(times_fm_df_actual, times_fm_actual_column, times_fm_date_column)
+                            decompose_time_series2(times_fm_df_actual, times_fm_actual_column, times_fm_date_column, duplicated_flag)
                             
                     
                             st.divider()
