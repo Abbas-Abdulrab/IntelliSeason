@@ -101,7 +101,7 @@ If you already have an account, simply log in to continue your journey with us.
 """)
 
 # Function to check if the Flask server is running on port 5000
-def is_flask_server_running(url=f"{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}"):
+def is_flask_server_running(url=f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}'):
     try:
         response = requests.get(url)
         return response.status_code == 200

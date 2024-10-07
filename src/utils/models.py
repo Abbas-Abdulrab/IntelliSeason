@@ -31,7 +31,7 @@ COLUMNS_API_URL = f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000"
 
 
 # URL of the Flask server
-FLASK_SERVER_URL = f"{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}"
+FLASK_SERVER_URL = f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}'
 
 def parse_date(date_data):
     possible_formats = [
@@ -1454,7 +1454,7 @@ def endpoint_predict(selected_endpoint_id):
 
 
 def run_prophet_training():
-    FLASK_SERVER_URL = {os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}
+    FLASK_SERVER_URL = f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}'
 
     # Section 1: Upload CSV and specify columns
     st.title("Upload CSV and Train a Prophet Model")
