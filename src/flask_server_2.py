@@ -296,6 +296,42 @@ def upload_data():
         # Log the error message
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
+
+# Route to delete the BigQuery table after processing
+@app.route('/delete_bigquery_table', methods=['DELETE'])
+def delete_bigquery_table():
+    global user_info
+    response = get_or_refresh_token()
+
+    # Ensure response is a dictionary and contains the 'status_code' key
+    if isinstance(response, dict) and 'status_code' in response:
+        if response['status_code'] == 200:
+            credentials = response['credentials']
+            # Continue with your BigQuery operations
+        else:
+            # Return an error response to the client or handle it as needed
+            return jsonify({"error": response.get('error', 'Unknown error occurred')}), 401
+    else:
+        # Handle cases where the response is not what we expected
+        return jsonify({"error": "Unexpected response format."}), 500
+    try:
+        request_data = request.json
+        train_file_path = request_data.get('train_file_path')
+
+        if not train_file_path:
+            return jsonify({"error": "Train file path is required."}), 400
+
+        client = bigquery.Client(credentials=credentials, project=PROJECT_ID)
+        train_base_file_name = os.path.splitext(os.path.basename(train_file_path))[0]
+        train_table_id = f"{PROJECT_ID}.{DATA_SET_ID}.{train_base_file_name}_{user_info['id']}"
+
+        client.delete_table(train_table_id, not_found_ok=True)
+
+        return jsonify({"message": "BigQuery table deleted successfully."}), 200
+    except Exception as e:
+        return jsonify({"error": f"Error deleting BigQuery table: {str(e)}"}), 500
+    
+
 # Endpoint to handle ARIMA+ forecasting
 @app.route('/run_arima_plus', methods=['GET'])
 def run_arima_plus():
@@ -357,11 +393,6 @@ def run_arima_plus():
             ML.EXPLAIN_FORECAST(MODEL `{PROJECT_ID}.{DATA_SET_ID}.arima_plus_model`, STRUCT({forecast_period} AS horizon));
         """
         forecast_df = client.query(forecast_query).to_dataframe()
-
-        # Delete the ARIMA Plus model after forecasting
-        delete_model_query = f"DROP MODEL `{PROJECT_ID}.{DATA_SET_ID}.arima_plus_model`"
-        client.query(delete_model_query).result()
-
 
         # Return forecast results as JSON
         return jsonify(forecast_df.to_dict(orient='records'))
@@ -425,10 +456,6 @@ def run_arima():
             ML.FORECAST(MODEL `{PROJECT_ID}.{DATA_SET_ID}.arima_model`, STRUCT({forecast_period} AS horizon));
         """
         forecast_df = client.query(forecast_query).to_dataframe()
-
-        # Delete the ARIMA model after forecasting
-        delete_model_query = f"DROP MODEL `{PROJECT_ID}.{DATA_SET_ID}.arima_model`"
-        client.query(delete_model_query).result()
 
         # Return forecast results as JSON
         return jsonify(forecast_df.to_dict(orient='records'))
@@ -815,7 +842,7 @@ def list_user_endpoints():
         existing_endpoints = aiplatform.Endpoint.list()
         user_endpoints = [
             {"display_name": ep.display_name, "resource_name": ep.resource_name}
-            for ep in existing_endpoints #if user_id in ep.display_name
+            for ep in existing_endpoints if user_id in ep.display_name
         ]
 
         return jsonify({"endpoints": user_endpoints}), 200
