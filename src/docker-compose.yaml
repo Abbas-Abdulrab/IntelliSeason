@@ -9,6 +9,8 @@ services:
       - "5000:5000"
     env_file:
       - .env
+    networks:
+      - intelliseason-network
     depends_on:
       - streamlit_app
 
@@ -22,3 +24,8 @@ services:
       - "8501:8501"
     env_file:
       - .env
+    networks:
+      - intelliseason-network
+
+networks:
+  intelliseason-network:
