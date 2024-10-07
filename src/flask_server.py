@@ -1,4 +1,3 @@
-import os
 from flask import Flask, request, redirect, session, jsonify, render_template, url_for
 from requests_oauthlib import OAuth2Session
 from google.oauth2.credentials import Credentials
@@ -100,7 +99,7 @@ def login():
 
 @app.route('/streamlit')
 def streamlit_app():
-    return redirect(os.environ.get('STREAMLIT_APP_URL'))
+    return redirect(os.environ.get('STREAMLIT_SERVER_ADDR'))
 
 @app.route('/callback')
 def callback():

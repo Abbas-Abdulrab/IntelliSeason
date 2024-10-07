@@ -21,17 +21,17 @@ import re
 import math
 
 # API URLs
-LIST_MODELS_URL = 'http://localhost:5000/list_models'
-API_URL_PROPHET = 'http://localhost:5000/predict_prophet'
-LIST_ENDPOINTS_URL = 'http://localhost:5000/list_user_endpoints'
-DEPLOY_MODEL_URL = 'http://localhost:5000/deploy_model'
-DELETE_ENDPOINT_URL = 'http://localhost:5000/delete_endpoint'
-PREDICT_URL = 'http://localhost:5000/predict'
-COLUMNS_API_URL = 'http://localhost:5000/get_columns'
+LIST_MODELS_URL = f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/list_models'
+API_URL_PROPHET = f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/predict_prophet'
+LIST_ENDPOINTS_URL = f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/list_user_endpoints'
+DEPLOY_MODEL_URL = f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/deploy_model'
+DELETE_ENDPOINT_URL = f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/delete_endpoint'
+PREDICT_URL = f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/predict'
+COLUMNS_API_URL = f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/get_columns'
 
 
 # URL of the Flask server
-FLASK_SERVER_URL = "http://localhost:5000"
+FLASK_SERVER_URL = f"{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}"
 
 def parse_date(date_data):
     possible_formats = [
@@ -230,30 +230,16 @@ def decompose_time_series2(df, column, date_column, duplicated_flag=None):
         st.plotly_chart(seasonal_plot, use_container_width=True)
 
 
-def calculate_accuracy(y_true, y_pred, flag=None):
+def calculate_accuracy(y_true, y_pred,flag=None):
     """Calculates and returns common accuracy metrics."""
-    
-    # Clip y_true values to avoid division by zero or near-zero values for MAPE calculation
-    y_true_clipped = np.clip(y_true, 1e-9, None)
-    
     if flag:
-        # Calculate MAPE with clipped y_true values
-        mape = np.mean(np.abs((y_true_clipped - y_pred) / y_true_clipped))
-        accuracy = 100 - (mape * 100)  # Accuracy formula: 100% - MAPE
-        
-        # Ensure accuracy does not exceed 100%
-        accuracy = np.clip(accuracy, 0, 100)
-        
+        mape = mean_absolute_percentage_error(y_true, y_pred)
+        accuracy = np.abs(100 - (mape * 100))
         st.session_state.accuracy = accuracy
         st.subheader(f"Forecast Accuracy: {accuracy:.2f}%")
     else:
-        # Calculate R^2 score (which ranges from -∞ to 1)
         r2 = r2_score(y_true, y_pred)
         st.session_state.accuracy = r2 * 100
-        
-        # Cap accuracy at 100% and ensure no negative percentage is shown
-        st.session_state.accuracy = np.clip(st.session_state.accuracy, 0, 100)
-        
         st.subheader(f"Forecast Accuracy: {st.session_state.accuracy:.2f}%")
 
 
@@ -490,7 +476,7 @@ def run_arima_plus_model():
                 if st.button("Start ARIMA Plus Training"):
                     # Post training data to Flask API
                     response = requests.post(
-                        'http://127.0.0.1:5000/upload_data',
+                        f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/upload_data',
                         json={
                             'train_file_path': train_file_path,
                             'date_column': date_column
@@ -505,7 +491,7 @@ def run_arima_plus_model():
                         }
                         st.success("Data uploaded successfully.")
                         
-                        response = requests.get('http://127.0.0.1:5000/run_arima_plus', params=params)
+                        response = requests.get(f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/run_arima_plus', params=params)
                         if response.ok:
                             forecast_df = pd.DataFrame(response.json())
 
@@ -544,7 +530,7 @@ def run_arima_plus_model():
                             )
 
                             # After the model finishes, delete the file from BigQuery and local directory
-                            requests.delete(f'http://127.0.0.1:5000/delete_bigquery_table', json={'train_file_path': train_file_path})
+                            requests.delete(f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/delete_bigquery_table', json={'train_file_path': train_file_path})
                             os.remove(train_file_path)
                             os.remove(clean_file_path)
                     elif response.status_code == 401:
@@ -552,8 +538,8 @@ def run_arima_plus_model():
                         st.error(error_message)
                         
                         # Redirect to the login page using JavaScript
-                        nav_script = """
-                            <meta http-equiv="refresh" content="0; url='http://localhost:5000'">
+                        nav_script = f"""
+                            <meta http-equiv="refresh" content="0; url='{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}'">
                         """
                         st.write(nav_script, unsafe_allow_html=True)
 
@@ -664,7 +650,7 @@ def run_arima_model():
 
                 if st.button("Start ARIMA Training"):
                     response = requests.post(
-                        'http://127.0.0.1:5000/upload_data',
+                        f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/upload_data',
                         json={
                             'train_file_path': train_file_path,
                             'date_column': date_column
@@ -679,7 +665,7 @@ def run_arima_model():
                             'train_file_path': train_file_path
                         }
                         st.success("Data uploaded successfully.")
-                        response = requests.get('http://127.0.0.1:5000/run_arima', params=params)
+                        response = requests.get(f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/run_arima', params=params)
                         if response.ok:
                             forecast_df = pd.DataFrame(response.json())
                             forecast_df = forecast_df.rename(columns={'forecast_timestamp': date_column, 'forecast_value': 'value'})
@@ -712,23 +698,23 @@ def run_arima_model():
                                 mime='text/csv'
                             )
                             # After the model finishes, delete the file from BigQuery and local directory
-                            requests.delete(f'http://127.0.0.1:5000/delete_bigquery_table', json={'train_file_path': train_file_path})
+                            requests.delete(f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/delete_bigquery_table', json={'train_file_path': train_file_path})
                             os.remove(train_file_path)
                             os.remove(clean_file_path)
 
                         elif response.status_code == 401:
                             error_message = response.json().get('error')
                             st.error(error_message)
-                            nav_script = """
-                                <meta http-equiv="refresh" content="0; url='http://localhost:5000'">
+                            nav_script = f"""
+                                <meta http-equiv="refresh" content="0; url='{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}'">
                             """
                             st.write(nav_script, unsafe_allow_html=True)
 
                     elif response.status_code == 401:
                         error_message = response.json().get('error')
                         st.error(error_message)  # Show error message in Streamlit
-                        nav_script = """
-                            <meta http-equiv="refresh" content="0; url='http://localhost:5000'">
+                        nav_script = f"""
+                            <meta http-equiv="refresh" content="0; url='{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}'">
                         """
                         st.write(nav_script, unsafe_allow_html=True)
 
@@ -822,7 +808,7 @@ def run_times_fm():
                     times_fm_train_csv_buffer.seek(0)
 
                     # Send training data to the model
-                    response = requests.post('http://localhost:5000/model', json={
+                    response = requests.post(f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/model', json={
                         'csv_data': times_fm_train_csv_buffer.getvalue(),
                         'date_column': times_fm_date_column,
                         'target_column': times_fm_actual_column
@@ -830,7 +816,7 @@ def run_times_fm():
 
                     if response.status_code == 200:
                         st.success("TimesFM Model run completed. Fetching results...")
-                        response = requests.get('http://localhost:5000/get_model_response')
+                        response = requests.get(f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/get_model_response')
 
                         if response.status_code == 200:
                             try:
@@ -969,7 +955,7 @@ def run_auto_ml():
                         'time_series_identifier': time_series_identifier
                     }
 
-                    response = requests.post('http://127.0.0.1:5000/automl', data=data)
+                    response = requests.post(f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/automl', data=data)
 
                     if response.status_code == 200:
                         st.success("Model finished training successfully")
@@ -1231,7 +1217,7 @@ def filter_and_prepare_data(data, date_column, target_column, selected_category=
 
 
 def endpoint_predict(selected_endpoint_id):
-    API_URL = 'http://localhost:5000/predict'
+    API_URL = f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/predict'
     BATCH_SIZE_LIMIT = 1.4 * 1024 * 1024  # 1.4MB to stay safely under the 1.5MB limit
 
     st.title("Predictions")
@@ -1294,7 +1280,7 @@ def endpoint_predict(selected_endpoint_id):
 
                 # Handle predictions only if not already computed
                 if st.session_state.predictions is None:
-                    # st.session_state.predictions = handle_predictions(filtered_data, forecast_horizon, date_column, 'http://localhost:5000/predict', 1.4 * 1024 * 1024, selected_endpoint_id)
+                    # st.session_state.predictions = handle_predictions(filtered_data, forecast_horizon, date_column, f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}', 1.4 * 1024 * 1024, selected_endpoint_id)
                     st.session_state.predictions  = predict_in_batches(filtered_data, API_URL, BATCH_SIZE_LIMIT, selected_endpoint_id, forecast_horizon, date_column)
                 filtered_data['Predicted'] = st.session_state.predictions
                 
@@ -1468,7 +1454,7 @@ def endpoint_predict(selected_endpoint_id):
 
 
 def run_prophet_training():
-    FLASK_SERVER_URL = 'http://localhost:5000'
+    FLASK_SERVER_URL = {os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}
 
     # Section 1: Upload CSV and specify columns
     st.title("Upload CSV and Train a Prophet Model")
@@ -1551,7 +1537,7 @@ def run_prophet_training():
 
 
 def run_prophet_batch_predictions(model_name):
-    FLASK_SERVER_URL = 'http://localhost:5000'
+    FLASK_SERVER_URL = f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}'
 
     # Section 1: Upload CSV and specify columns
     st.title("Upload CSV and Run Batch Predictions")

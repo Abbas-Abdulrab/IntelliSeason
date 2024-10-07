@@ -12,8 +12,8 @@ from utils.models import run_arima_model, run_arima_plus_model, run_times_fm, ru
 from utils.models import endpoint_predict, deploy_model, delete_endpoint, run_prophet_training
 
 # API URLs
-LIST_MODELS_URL = 'http://localhost:5000/list_models'
-LIST_ENDPOINTS_URL = 'http://localhost:5000/list_user_endpoints'
+LIST_MODELS_URL = f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/list_models'
+LIST_ENDPOINTS_URL = f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/list_user_endpoints'
 
 BATCH_SIZE_LIMIT = 1.4 * 1024 * 1024  # 1.4MB batch size limit
 
@@ -129,8 +129,8 @@ def main():
                 error_message = models_response.json().get('error')
                 st.error(error_message)  # Show error message in Streamlit
                 
-                nav_script = """
-                    <meta http-equiv="refresh" content="0; url='http://localhost:5000'">
+                nav_script = f"""
+                    <meta http-equiv="refresh" content="0; url='{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}'">
                 """
                 st.write(nav_script, unsafe_allow_html=True)
 
@@ -160,8 +160,8 @@ def main():
                 error_message = endpoints_response.json().get('error')
                 st.error(error_message)  # Show error message in Streamlit
                 
-                nav_script = """
-                    <meta http-equiv="refresh" content="0; url='http://localhost:5000'">
+                nav_script = f"""
+                    <meta http-equiv="refresh" content="0; url='{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}'">
                 """
                 st.write(nav_script, unsafe_allow_html=True)
         # Handle the session state actions
