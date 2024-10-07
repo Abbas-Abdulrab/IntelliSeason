@@ -1,8 +1,10 @@
+import os
 import streamlit as st
 import pandas as pd
 from streamlit.components.v1 import iframe
 from streamlit_option_menu import option_menu
-from flask_server_2 import app
+import streamlit.web.bootstrap
+from flask_server import app
 import matplotlib.pyplot as plt
 import re
 import requests

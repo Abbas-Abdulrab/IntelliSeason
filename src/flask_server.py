@@ -32,19 +32,21 @@ streamlit_process = None
 app = Flask(__name__)
 
 app.secret_key = os.environ.get('SECRET_KEY', 'your_default_secret_key')
-client_id = ''
-client_secret = ''
-authorization_base_url = "https://accounts.google.com/o/oauth2/auth"
-token_url = "https://oauth2.googleapis.com/token"
-redirect_uri = "http://localhost:5000/callback"
-bucket_name = ''
-user_info_url = "https://www.googleapis.com/oauth2/v1/userinfo"
-PROJECT_ID = ''
-DATA_SET_ID = ''
-SERVICE_ACCOUNT = ""
-TRAIN_JOB = None
-PREDICT_URL_TEMPLATE = ''
-LOCATION=""
+
+client_id = os.environ.get('CLIENT_ID')
+client_secret = os.environ.get('CLIENT_SECRET')
+authorization_base_url = os.environ.get('AUTHORIZATION_BASE_URL')
+token_url = os.environ.get('TOKEN_URL')
+redirect_uri = os.environ.get('REDIRECT_URI')
+bucket_name = os.environ.get('BUCKET_NAME')
+user_info_url = os.environ.get('USER_INFO_URL')
+PROJECT_ID = os.environ.get('PROJECT_ID')
+DATA_SET_ID = os.environ.get('DATA_SET_ID')
+PROJECT_EP = os.environ.get('PROJECT_EP')
+SERVICE_ACCOUNT = os.environ.get('SERVICE_ACCOUNT')
+TRAIN_JOB = os.environ.get('TRAIN_JOB')
+PREDICT_URL_TEMPLATE = os.environ.get('PREDICT_URL_TEMPLATE')
+LOCATION = os.environ.get('LOCATION')
 scope = [
     'https://www.googleapis.com/auth/userinfo.profile', 
     'https://www.googleapis.com/auth/userinfo.email',
@@ -98,7 +100,7 @@ def login():
 
 @app.route('/streamlit')
 def streamlit_app():
-    return redirect("http://localhost:8501")
+    return redirect(os.environ.get('STREAMLIT_APP_URL'))
 
 @app.route('/callback')
 def callback():
@@ -123,13 +125,13 @@ def callback():
     }
 
     # Only start Streamlit if it hasn't been started yet
-    if not streamlit_process or streamlit_process.poll() is not None:
-        env = os.environ.copy()
-        env['BROWSER'] = 'none'
-        streamlit_process = subprocess.Popen(
-            ["streamlit", "run", "streamlit2.py", "--server.headless", "true"],
-            env=env
-        )
+    # if not streamlit_process or streamlit_process.poll() is not None:
+    #     env = os.environ.copy()
+    #     env['BROWSER'] = 'none'
+    #     streamlit_process = subprocess.Popen(
+    #         ["streamlit", "run", "streamlit2.py", "--server.headless", "true"],
+    #         env=env
+    #     )
 
     return redirect("/streamlit")
 
@@ -1249,4 +1251,4 @@ def process_and_train():
     
 if __name__ == '__main__':
     app.debug = True
-    app.run()
+    app.run(host="0.0.0.0", port=5000)
