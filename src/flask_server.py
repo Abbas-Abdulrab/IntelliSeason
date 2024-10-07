@@ -99,7 +99,7 @@ def login():
 
 @app.route('/streamlit')
 def streamlit_app():
-    return redirect(os.environ.get('STREAMLIT_SERVER_ADDR'))
+    return redirect(os.environ.get('STREAMLIT_SERVER_ADDR', "http://localhost:8501"))
 
 @app.route('/callback')
 def callback():
