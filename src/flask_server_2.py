@@ -19,6 +19,7 @@ from google.auth.exceptions import RefreshError
 import logging
 import re
 import io
+from asgiref.wsgi import WsgiToAsgi 
 from train_pipeline import run_training_pipeline
 
 
@@ -1246,7 +1247,4 @@ def process_and_train():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-    
-if __name__ == '__main__':
-    app.debug = True
-    app.run()
+asgi_app = WsgiToAsgi(app)
