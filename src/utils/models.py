@@ -1,3 +1,5 @@
+# Disable telemetry
+os.environ["ST_DISABLE_TELEMETRY"] = "1"
 
 import streamlit as st
 import requests

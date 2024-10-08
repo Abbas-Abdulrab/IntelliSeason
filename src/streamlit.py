@@ -1,4 +1,8 @@
 import os
+
+# Disable telemetry
+os.environ["ST_DISABLE_TELEMETRY"] = "1"
+
 import streamlit as st
 import pandas as pd
 from streamlit.components.v1 import iframe
