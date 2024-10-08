@@ -1,3 +1,5 @@
+import os
+
 # Disable telemetry
 os.environ["ST_DISABLE_TELEMETRY"] = "1"
 
@@ -7,7 +9,6 @@ import pandas as pd
 import json
 import plotly.graph_objs as go
 from streamlit.components.v1 import iframe
-import os
 import plotly.express as px
 from datetime import timedelta
 import seaborn as sns
