@@ -75,7 +75,12 @@ def get_or_refresh_token():
         try:
             credentials = credentials.refresh(Request())
             # Update the global token and session with the new access token
-            global_token = credentials.token
+            # global_token = credentials.token
+            # Update the global token with the new access token
+            global_token = {
+                'access_token': credentials.token,
+                'refresh_token': credentials.refresh_token
+            }
         
             # session['oauth_token'] = global_token  # Update the session
         except Exception as e:
