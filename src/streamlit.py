@@ -94,8 +94,8 @@ def main():
 
         # Fetch models and endpoints from Flask
         with st.spinner('Loading models and endpoints...'):
-            models_response = requests.get(LIST_MODELS_URL, verify=False)
-            endpoints_response = requests.get(LIST_ENDPOINTS_URL, verify=False)
+            models_response = requests.get(LIST_MODELS_URL, verify=os.environ.get("CERTIFICATE_PATH", False))
+            endpoints_response = requests.get(LIST_ENDPOINTS_URL, verify=os.environ.get("CERTIFICATE_PATH", False))
             
             # models = requests.get(LIST_MODELS_URL).json().get('models', [])
             # endpoints = requests.get(LIST_ENDPOINTS_URL).json().get('endpoints', [])
