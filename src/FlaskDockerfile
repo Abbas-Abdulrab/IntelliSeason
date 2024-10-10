@@ -1,8 +1,16 @@
 FROM python:3.11-slim
 
-WORKDIR /app
+# Create a new user named "appuser" with a home directory
+RUN useradd -m appuser
 
-COPY . .
+# Change the ownership of your application directory to the new user
+# Assuming your application is in /app
+WORKDIR /app
+COPY . /app
+RUN chown -R appuser:appuser /app
+
+# Switch to the new user
+USER appuser
 
 RUN pip install --no-cache-dir -r requirements.txt
 
