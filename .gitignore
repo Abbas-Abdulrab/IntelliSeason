@@ -1,3 +1,7 @@
 src/_.apps.ocptest.otg.om.crt
 src/utils/_.apps.ocptest.otg.om.crt
 src/cert.crt
+src/flask.crt
+src/flask.key
+src/streamlit.crt
+src/streamlit.key
