@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: FlaskDockerfile
-    image: ziyadabd/intelli-season-flask-app:1.2.2
+    image: ziyadabd/intelli-season-flask-app:1.2.4
     container_name: flask-app-cont
     ports:
       - "5000:5000"
@@ -16,7 +16,7 @@ services:
     build:
       context: .
       dockerfile: StreamlitDockerfile
-    image: ziyadabd/intelli-season-streamlit-app:1.2.2
+    image: ziyadabd/intelli-season-streamlit-app:1.2.4
     container_name: streamlit-app-cont
     ports:
       - "8501:8501"

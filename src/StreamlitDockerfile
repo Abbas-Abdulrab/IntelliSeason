@@ -1,13 +1,8 @@
 FROM python:3.11-slim
 
-# Change the ownership of your application directory to the new user
-# Assuming your application is in /app
 WORKDIR /app
-COPY . /app
-RUN chown -R appuser:appuser /app
 
-# Switch to the new user
-USER appuser
+COPY . .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
