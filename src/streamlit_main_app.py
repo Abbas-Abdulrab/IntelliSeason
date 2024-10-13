@@ -93,8 +93,8 @@ def main():
 
         # Fetch models and endpoints from Flask
         with st.spinner('Loading models and endpoints...'):
-            models_response = requests.get(LIST_MODELS_URL, verify=os.environ.get("CERTIFICATE_PATH", False), params={"email": "sa@gmail.com"})
-            endpoints_response = requests.get(LIST_ENDPOINTS_URL, verify=os.environ.get("CERTIFICATE_PATH", False))
+            models_response = requests.get(LIST_MODELS_URL, verify=os.environ.get("CERTIFICATE_PATH", False), params={"email": st.query_params.user_email})
+            endpoints_response = requests.get(LIST_ENDPOINTS_URL, verify=os.environ.get("CERTIFICATE_PATH", False), params={"email": st.query_params.user_email})
             
             # models = requests.get(LIST_MODELS_URL).json().get('models', [])
             # endpoints = requests.get(LIST_ENDPOINTS_URL).json().get('endpoints', [])
