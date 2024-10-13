@@ -4,11 +4,7 @@ import os
 os.environ["ST_DISABLE_TELEMETRY"] = "1"
 
 import streamlit as st
-import pandas as pd
-from streamlit.components.v1 import iframe
 from streamlit_option_menu import option_menu
-from flask_server import app
-import matplotlib.pyplot as plt
 import re
 import requests
 from utils.models import run_arima_model, run_arima_plus_model, run_times_fm, run_auto_ml
@@ -97,7 +93,7 @@ def main():
 
         # Fetch models and endpoints from Flask
         with st.spinner('Loading models and endpoints...'):
-            models_response = requests.get(LIST_MODELS_URL, verify=os.environ.get("CERTIFICATE_PATH", False))
+            models_response = requests.get(LIST_MODELS_URL, verify=os.environ.get("CERTIFICATE_PATH", False), params={"email": "sa@gmail.com"})
             endpoints_response = requests.get(LIST_ENDPOINTS_URL, verify=os.environ.get("CERTIFICATE_PATH", False))
             
             # models = requests.get(LIST_MODELS_URL).json().get('models', [])

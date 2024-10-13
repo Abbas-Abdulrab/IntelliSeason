@@ -18,6 +18,7 @@ from google.cloud import bigquery
 from google.auth.transport.requests import Request
 from google.cloud import storage, aiplatform
 
+from global_state_store import state_store
 from train_pipeline import run_training_pipeline
 
 
@@ -110,7 +111,8 @@ def login():
 
 @app.route('/streamlit')
 def streamlit_app():
-    return redirect(os.environ.get('STREAMLIT_SERVER_ADDR', "http://localhost:8501"))
+    url = os.environ.get('STREAMLIT_SERVER_ADDR', "http://localhost:8501")
+    return redirect(f"{url}?user_email={session['gcp_user_info']['email']}")
 
 
 @app.route('/callback')
@@ -126,6 +128,8 @@ def callback():
     # global_token = token
     session['oauth_token'] = token
     session['gcp_user_info'] = google.get(user_info_url).json()
+
+    state_store[session['gcp_user_info']['email']] = session['oauth_token']['access_token']
 
     # Save user info in session
     # session['user_info'] = {
@@ -688,7 +692,6 @@ def predict_prophet():
 '''
 predict/automl/endpoints - Abbas
 '''
-
 @app.route('/list_models')
 def list_models():
 
