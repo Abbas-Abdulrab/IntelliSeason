@@ -5,3 +5,8 @@ src/flask.crt
 src/flask.key
 src/streamlit.crt
 src/streamlit.key
+src/.env
+
+venv/
+.idea/
+.env
