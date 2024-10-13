@@ -1,24 +1,28 @@
+import time
+import os
+import json
+import logging
+import re
+import io
+import pandas as pd
+import requests
+from datetime import datetime
+from io import StringIO
+
+from asgiref.wsgi import WsgiToAsgi
+from dotenv import load_dotenv
 from flask import Flask, request, redirect, session, jsonify, render_template, url_for
 from requests_oauthlib import OAuth2Session
 from google.oauth2.credentials import Credentials
 from google.cloud import bigquery
 from google.auth.transport.requests import Request
 from google.cloud import storage, aiplatform
-from google.cloud.exceptions import NotFound
-import subprocess
-import json
-import os
-import pandas as pd
-import requests
-from io import StringIO
-from google.protobuf import json_format
-import time
-from datetime import datetime
-from google.auth.exceptions import RefreshError
-import logging
-import re
-import io
+
 from train_pipeline import run_training_pipeline
+
+
+# Load the environment variables from .env file
+load_dotenv()
 
 
 UPLOAD_DIR = os.path.join(os.getcwd(), 'uploads')
@@ -55,7 +59,8 @@ scope = [
 ]
 
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
-    
+
+
 def get_or_refresh_token():
     global global_token
     if not global_token:
@@ -88,6 +93,7 @@ def get_or_refresh_token():
 
     return {"status_code": 200, "credentials": credentials}
 
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -106,27 +112,27 @@ def login():
 def streamlit_app():
     return redirect(os.environ.get('STREAMLIT_SERVER_ADDR', "http://localhost:8501"))
 
+
 @app.route('/callback')
 def callback():
-    global global_token
-    global user_info
+    # global global_token
+    # global user_info
     global streamlit_process
 
     google = OAuth2Session(client_id, redirect_uri=redirect_uri, state=session['oauth_state'])
     token = google.fetch_token(token_url, client_secret=client_secret, authorization_response=request.url)
     
     # Set the global token and store it in the session to persist across requests
-    global_token = token
+    # global_token = token
     session['oauth_token'] = token
-
-    user_info = google.get(user_info_url).json()
+    session['gcp_user_info'] = google.get(user_info_url).json()
 
     # Save user info in session
-    session['user_info'] = {
-        'id': user_info.get('id'),
-        'name': user_info.get('name'),
-        'email': user_info.get('email')
-    }
+    # session['user_info'] = {
+    #     'id': user_info.get('id'),
+    #     'name': user_info.get('name'),
+    #     'email': user_info.get('email')
+    # }
 
     # Only start Streamlit if it hasn't been started yet
     # if not streamlit_process or streamlit_process.poll() is not None:
@@ -138,6 +144,7 @@ def callback():
     #     )
 
     return redirect("/streamlit")
+
 
 def get_user_info():
     response = get_or_refresh_token()
@@ -235,7 +242,8 @@ def automl():
 
     return jsonify({"model_display_name": model_display_name})
     # return f"Successfully uploaded {os.path.basename(file_path)} to Google Cloud Storage and started AutoML training."
-    
+
+
 @app.route('/upload_data', methods=['POST'])
 def upload_data():
     global user_info
@@ -1254,5 +1262,11 @@ def process_and_train():
 
     
 if __name__ == '__main__':
+    import uvicorn
+
     app.debug = True
-    app.run(host="0.0.0.0", port=5000)
+
+    # Wrap the WSGI Flask app with WsgiToAsgi to make it ASGI-compatible
+    asgi_app = WsgiToAsgi(app)
+
+    uvicorn.run(asgi_app, host="0.0.0.0", port=5000)
