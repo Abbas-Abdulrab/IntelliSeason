@@ -1,4 +1,7 @@
 from flask import Flask, request, redirect, session, jsonify, render_template, url_for
+from flask_session import Session
+from flask_sqlalchemy import SQLAlchemy
+import pickle
 from requests_oauthlib import OAuth2Session
 from google.oauth2.credentials import Credentials
 from google.cloud import bigquery
@@ -30,7 +33,54 @@ global_model_response = None
 streamlit_process = None
 app = Flask(__name__)
 
-app.secret_key = os.environ.get('SECRET_KEY', 'your_default_secret_key')
+# MySQL configuration
+DB_HOST = '34.126.210.217'
+DB_USER = 'root'
+DB_PASSWORD = 'ziyadiscool'
+DB_NAME = 'sessions'
+
+# Set a secret key for signing session cookies
+app.secret_key = 'your_super_secret_key'
+
+# Configure the SQLAlchemy database URI for MySQL
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://root:ziyadiscool@34.126.210.217/sessions'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False  # Optional, disables modification tracking to save resources
+# Flask-Session configuration
+app.config['SESSION_TYPE'] = 'sqlalchemy'  # Specify SQLAlchemy as the session storage type
+app.config['SESSION_SQLALCHEMY'] = SQLAlchemy(app)  # Pass the SQLAlchemy instance to Flask-Session
+app.config['SESSION_SQLALCHEMY_TABLE'] = 'sessions'  # Optional, default is 'sessions'
+app.config['SESSION_PERMANENT'] = False  # Optionally set session to not be permanent
+app.config['SESSION_USE_SIGNER'] = False  # Use signed cookies to prevent tampering
+app.config['SESSION_SERIALIZER'] = 'json'
+
+# Initialize extensions
+db = app.config['SESSION_SQLALCHEMY']
+Session(app)
+
+# # Define the Session model
+# class Session(db.Model):
+#     __tablename__ = app.config.get('SESSION_SQLALCHEMY_TABLE', 'sessions')
+
+#     id = db.Column(db.Integer, primary_key=True)
+#     session_id = db.Column(db.String(255), nullable=False, unique=True)
+#     data = db.Column(db.Text)  # Use db.Text if using JSON serialization
+#     expiry = db.Column(db.DateTime)
+
+# Create database tables
+with app.app_context():
+    db.create_all()
+
+def load_session_from_id(session_id):
+    session_model = app.session_interface.sql_session_model
+    key_prefix = app.session_interface.key_prefix  # Get the key prefix used by Flask-Session
+    prefixed_session_id = key_prefix + session_id
+    session_record = session_model.query.filter_by(session_id=prefixed_session_id).first()
+    if session_record:
+        session_data = json.loads(session_record.data)
+        session.clear()
+        session.update(session_data)
+    else:
+        print("Session not found.")
 
 client_id = os.environ.get('CLIENT_ID')
 client_secret = os.environ.get('CLIENT_SECRET')
@@ -55,16 +105,47 @@ scope = [
 ]
 
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
-    
-def get_or_refresh_token():
-    global global_token
-    if not global_token:
+
+def get_or_refresh_token(sid = None):
+    print("sid: " + str(sid))
+    load_session_from_id(sid)
+    print("Session:  "+ str(session))
+    # global global_token
+    # if not global_token:
+    #     return {"status_code": 401, "error": "Session expired. Please log in again."}
+
+    # # Use the existing global_token to create credentials
+    # credentials = Credentials(
+    #     token=global_token['access_token'],
+    #     refresh_token=global_token['refresh_token'],
+    #     token_uri=token_url,  # Token URL to refresh the token
+    #     client_id=client_id,
+    #     client_secret=client_secret,
+    # )
+
+    # # Check if the credentials are expired and refresh if necessary
+    # if credentials.expired:
+    #     try:
+    #         credentials = credentials.refresh(Request())
+    #         # Update the global token and session with the new access token
+    #         # global_token = credentials.token
+    #         # Update the global token with the new access token
+    #         global_token = {
+    #             'access_token': credentials.token,
+    #             'refresh_token': credentials.refresh_token
+    #         }
+
+    # Fetch the token from the session instead of using a global variable
+    oauth_token = session.get('oauth_token')
+
+    # If the token is not found in the session, return an error
+    if not oauth_token:
         return {"status_code": 401, "error": "Session expired. Please log in again."}
 
-    # Use the existing global_token to create credentials
+    # Use the token from the session to create credentials
     credentials = Credentials(
-        token=global_token['access_token'],
-        refresh_token=global_token['refresh_token'],
+        token=oauth_token['access_token'],
+        refresh_token=oauth_token['refresh_token'],
         token_uri=token_url,  # Token URL to refresh the token
         client_id=client_id,
         client_secret=client_secret,
@@ -73,14 +154,17 @@ def get_or_refresh_token():
     # Check if the credentials are expired and refresh if necessary
     if credentials.expired:
         try:
-            credentials = credentials.refresh(Request())
-            # Update the global token and session with the new access token
-            # global_token = credentials.token
-            # Update the global token with the new access token
-            global_token = {
+            # Refresh the credentials
+            credentials.refresh(Request())
+
+            # Update the session with the new access token
+            oauth_token = {
                 'access_token': credentials.token,
                 'refresh_token': credentials.refresh_token
             }
+
+            # Save the refreshed token back to the session
+            session['oauth_token'] = oauth_token
         
             # session['oauth_token'] = global_token  # Update the session
         except Exception as e:
@@ -99,18 +183,24 @@ def login():
     
     authorization_url, state = google.authorization_url(authorization_base_url, access_type="offline")
     session['oauth_state'] = state
+    print("login:")
+    print(session['oauth_state'])
     return redirect(authorization_url)
 
 
 @app.route('/streamlit')
 def streamlit_app():
-    return redirect(os.environ.get('STREAMLIT_SERVER_ADDR', "http://localhost:8501"))
+    streamlit_addr = os.environ.get('STREAMLIT_SERVER_ADDR', "http://localhost:8501")
+    return redirect(f"{streamlit_addr}/?sid={session.sid}")
 
 @app.route('/callback')
 def callback():
     global global_token
     global user_info
     global streamlit_process
+
+    print("callback:")
+    print(session['oauth_state'])
 
     google = OAuth2Session(client_id, redirect_uri=redirect_uri, state=session['oauth_state'])
     token = google.fetch_token(token_url, client_secret=client_secret, authorization_response=request.url)
@@ -136,8 +226,10 @@ def callback():
     #         ["streamlit", "run", "streamlit2.py", "--server.headless", "true"],
     #         env=env
     #     )
+    print("callback:")
+    print(session['user_info'])
 
-    return redirect("/streamlit")
+    return redirect('/streamlit')
 
 def get_user_info():
     response = get_or_refresh_token()
@@ -683,8 +775,9 @@ predict/automl/endpoints - Abbas
 
 @app.route('/list_models')
 def list_models():
-
-    response = get_or_refresh_token()
+    sid = request.args.get('sid')
+    print(sid)
+    response = get_or_refresh_token(sid)
    
     # Ensure response is a dictionary and contains the 'status_code' key
     if isinstance(response, dict) and 'status_code' in response:
@@ -819,8 +912,9 @@ def list_user_endpoints():
     if not user_info:
         user_info = get_user_info()
     try:
-        
-        response = get_or_refresh_token()
+        sid = request.args.get('sid')
+        print(sid)
+        response = get_or_refresh_token(sid)
 
         # Ensure response is a dictionary and contains the 'status_code' key
         if isinstance(response, dict) and 'status_code' in response:

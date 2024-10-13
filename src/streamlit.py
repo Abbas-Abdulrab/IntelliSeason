@@ -25,6 +25,13 @@ BATCH_SIZE_LIMIT = 1.4 * 1024 * 1024  # 1.4MB batch size limit
 def main():
     # st.title("IntelliSeason")
 
+    # Access query parameters
+    query_params = st.query_params
+    # Check if 'sid' exists in the query parameters
+    if 'sid' in query_params:
+        sid = query_params['sid']
+        st.write(f"{sid}")
+
     with st.sidebar:
         st.header("Options Menu")
 
@@ -97,8 +104,8 @@ def main():
 
         # Fetch models and endpoints from Flask
         with st.spinner('Loading models and endpoints...'):
-            models_response = requests.get(LIST_MODELS_URL, verify=os.environ.get("CERTIFICATE_PATH", False))
-            endpoints_response = requests.get(LIST_ENDPOINTS_URL, verify=os.environ.get("CERTIFICATE_PATH", False))
+            models_response = requests.get(LIST_MODELS_URL, params={'sid': sid} , verify=os.environ.get("CERTIFICATE_PATH", False))
+            endpoints_response = requests.get(LIST_ENDPOINTS_URL, params={'sid': sid} , verify=os.environ.get("CERTIFICATE_PATH", False))
             
             # models = requests.get(LIST_MODELS_URL).json().get('models', [])
             # endpoints = requests.get(LIST_ENDPOINTS_URL).json().get('endpoints', [])
