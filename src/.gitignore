@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Ignore session directory 
+flask_sessions/
+
 # Ignore virtual environment directories
 env/
 venv/
