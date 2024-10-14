@@ -7,8 +7,8 @@ import streamlit as st
 from streamlit_option_menu import option_menu
 import re
 import requests
-from utils.models import run_arima_model, run_arima_plus_model, run_times_fm, run_auto_ml
-from utils.models import endpoint_predict, deploy_model, delete_endpoint, run_prophet_training
+from utils.gcp_models import run_arima_model, run_arima_plus_model, run_times_fm, run_auto_ml
+from utils.gcp_models import endpoint_predict, deploy_model, delete_endpoint, run_prophet_training
 
 # API URLs
 LIST_MODELS_URL = f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/list_models'

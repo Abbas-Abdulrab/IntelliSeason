@@ -174,10 +174,11 @@ def parse_date(date_series):
     # Apply to each element in the series
     return date_series.apply(try_parse_single_date)
 
+
 @app.route('/automl',methods=['POST'])
 def automl():
-    
-    user_email = request.args.get("user_email")
+    # TODO: Waiting for the model to be trained should be async and the control should be returned to the app
+    user_email = request.form.get("user_email")
 
     if user_email not in state_store:
         return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
