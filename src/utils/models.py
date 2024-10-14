@@ -479,22 +479,25 @@ def run_arima_plus_model():
                 if st.button("Start ARIMA Plus Training"):
                     # Post training data to Flask API
                     response = requests.post(
-                        f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/upload_data',
+                        f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/upload_data', verify=os.environ.get("CERTIFICATE_PATH", False), 
                         json={
                             'train_file_path': train_file_path,
-                            'date_column': date_column
+                            'date_column': date_column,
+                            'user_email': st.query_params["user_email"]
                         }
                     )
                     if response.ok:
+                        # query_string_params = {"user_email": st.query_params["user_email"]}
                         params = {
                             'date_column': date_column,
                             'target_column': target_column,
                             'forecast_period': forecast_period_extended,
-                            'train_file_path': train_file_path
+                            'train_file_path': train_file_path,
+                            'user_email': st.query_params["user_email"]
                         }
                         st.success("Data uploaded successfully.")
-                        
-                        response = requests.get(f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/run_arima_plus', params=params)
+
+                        response = requests.get(f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/run_arima_plus', verify=os.environ.get("CERTIFICATE_PATH", False), params=params)
                         if response.ok:
                             forecast_df = pd.DataFrame(response.json())
 
@@ -533,7 +536,7 @@ def run_arima_plus_model():
                             )
 
                             # After the model finishes, delete the file from BigQuery and local directory
-                            requests.delete(f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/delete_bigquery_table', json={'train_file_path': train_file_path})
+                            requests.delete(f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/delete_bigquery_table', verify=os.environ.get("CERTIFICATE_PATH", False), json={'train_file_path': train_file_path, 'user_email': st.query_params["user_email"]})
                             os.remove(train_file_path)
                             os.remove(clean_file_path)
                     elif response.status_code == 401:
@@ -653,10 +656,12 @@ def run_arima_model():
 
                 if st.button("Start ARIMA Training"):
                     response = requests.post(
-                        f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/upload_data',
+                        f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/upload_data', 
+                        verify=os.environ.get("CERTIFICATE_PATH", False),
                         json={
                             'train_file_path': train_file_path,
-                            'date_column': date_column
+                            'date_column': date_column,
+                            'user_email': st.query_params["user_email"]
                         }
                     )
                     df.reset_index(drop=True, inplace=True)
@@ -665,10 +670,11 @@ def run_arima_model():
                             'date_column': date_column,
                             'target_column': target_column,
                             'forecast_period': forecast_period_extended,
-                            'train_file_path': train_file_path
+                            'train_file_path': train_file_path,
+                            'user_email' : st.query_params["user_email"]
                         }
                         st.success("Data uploaded successfully.")
-                        response = requests.get(f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/run_arima', params=params)
+                        response = requests.get(f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/run_arima', verify=os.environ.get("CERTIFICATE_PATH", False), params=params)
                         if response.ok:
                             forecast_df = pd.DataFrame(response.json())
                             forecast_df = forecast_df.rename(columns={'forecast_timestamp': date_column, 'forecast_value': 'value'})
@@ -701,7 +707,7 @@ def run_arima_model():
                                 mime='text/csv'
                             )
                             # After the model finishes, delete the file from BigQuery and local directory
-                            requests.delete(f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/delete_bigquery_table', json={'train_file_path': train_file_path})
+                            requests.delete(f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/delete_bigquery_table', verify=os.environ.get("CERTIFICATE_PATH", False), json={'train_file_path': train_file_path, 'user_email': st.query_params["user_email"]})
                             os.remove(train_file_path)
                             os.remove(clean_file_path)
 
@@ -811,15 +817,18 @@ def run_times_fm():
                     times_fm_train_csv_buffer.seek(0)
 
                     # Send training data to the model
-                    response = requests.post(f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/model', json={
+                    response = requests.post(f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/model', verify=os.environ.get("CERTIFICATE_PATH", False), json={
                         'csv_data': times_fm_train_csv_buffer.getvalue(),
                         'date_column': times_fm_date_column,
-                        'target_column': times_fm_actual_column
+                        'target_column': times_fm_actual_column, 
+                        'user_email': st.query_params["user_email"]
                     })
 
+
                     if response.status_code == 200:
+                        query_string_params = {"user_email": st.query_params["user_email"]}
                         st.success("TimesFM Model run completed. Fetching results...")
-                        response = requests.get(f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/get_model_response')
+                        response = requests.get(f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/get_model_response', verify=os.environ.get("CERTIFICATE_PATH", False), params=query_string_params)
 
                         if response.status_code == 200:
                             try:
@@ -955,10 +964,11 @@ def run_auto_ml():
                         'target_column': target_column,
                         'period': period,
                         'date_column': date_column,
-                        'time_series_identifier': time_series_identifier
+                        'time_series_identifier': time_series_identifier,
+                        'user_email': st.query_params["user_email"]
                     }
 
-                    response = requests.post(f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/automl', data=data)
+                    response = requests.post(f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/automl', verify=os.environ.get("CERTIFICATE_PATH", False), data=data)
 
                     if response.status_code == 200:
                         st.success("Model finished training successfully")
@@ -977,7 +987,8 @@ def run_auto_ml():
 
 def fetch_get_data_from_flask(endpoint):
     try:
-        response = requests.get(f"{FLASK_SERVER_URL}/{endpoint}")
+        query_string_params = {"user_email": st.query_params["user_email"]}
+        response = requests.get(f"{FLASK_SERVER_URL}/{endpoint}", verify=os.environ.get("CERTIFICATE_PATH", False), params=query_string_params)
         print(response)
         response.raise_for_status()
         return response.json()
@@ -989,7 +1000,7 @@ def fetch_get_data_from_flask(endpoint):
 # Function to get required columns for an endpoint
 @st.cache_data
 def get_required_columns(endpoint_id):
-    response = requests.get(COLUMNS_API_URL, params={"endpoint_id": endpoint_id})
+    response = requests.get(COLUMNS_API_URL, verify=os.environ.get("CERTIFICATE_PATH", False), params={"endpoint_id": endpoint_id, "user_email": st.query_params["user_email"]})
     print(response)
     if response.status_code == 200:
         data = response.json()
@@ -1011,8 +1022,8 @@ def deploy_model(endpoint_name, model):
     if endpoint_name:
         with st.spinner(f'Deploying {model["display_name"]}...'):
             response = requests.post(
-                DEPLOY_MODEL_URL,
-                json={"model_name": model['resource_name'], "endpoint_name": endpoint_name}
+                DEPLOY_MODEL_URL, verify=os.environ.get("CERTIFICATE_PATH", False),
+                json={"model_name": model['resource_name'], "endpoint_name": endpoint_name, 'user_email': st.query_params["user_email"]}
             )
             result = response.json()
             if response.status_code == 200:
@@ -1023,8 +1034,8 @@ def deploy_model(endpoint_name, model):
 def delete_endpoint(endpoint):
     with st.spinner(f'Deleting {endpoint["display_name"]}...'):
         response = requests.post(
-            DELETE_ENDPOINT_URL,
-            json={"endpoint_name": endpoint['resource_name']}
+            DELETE_ENDPOINT_URL, verify=os.environ.get("CERTIFICATE_PATH", False),
+            json={"endpoint_name": endpoint['resource_name'], 'user_email': st.query_params["user_email"]}
         )
         result = response.json()
         if response.status_code == 200:
@@ -1064,10 +1075,12 @@ def predict_in_batches_prophet(
                 # st.write(f"Processing batch {batch_num}/{total_batches}")
                 batch_response = requests.post(
                     api_url,
+                    verify=os.environ.get("CERTIFICATE_PATH", False),
                     json={
                         "instances": batch_data,
                         "endpoint_id": endpoint_id,
-                        "forecast_horizon": forecast_horizon
+                        "forecast_horizon": forecast_horizon,
+                        "user_email": st.query_params["user_email"]
                     }
                 )
 
@@ -1155,7 +1168,7 @@ def predict_in_batches(data, api_url, batch_size_limit, endpoint_id, forecast_ho
                 if isinstance(record[date], pd.Timestamp):
                     record[date] = record[date].strftime('%Y-%m-%d')
             # Send the POST request with the forecast horizon included
-            batch_response = requests.post(api_url, json={"data": batch_data, "endpoint_id": endpoint_id, "forecast_horizon": forecast_horizon})
+            batch_response = requests.post(api_url, verify=os.environ.get("CERTIFICATE_PATH", False), json={"data": batch_data, "endpoint_id": endpoint_id, "forecast_horizon": forecast_horizon, "user_email": st.query_params["user_email"]})
             if batch_response.status_code == 200:
                 batch_predictions = batch_response.json().get('predictions')
                 # st.write(batch_predictions)
@@ -1496,10 +1509,11 @@ def run_prophet_training():
                     "csv_data": csv_data,
                     "date_column": date_column,
                     "identifier_column": identifier_column,
+                    "user_email": st.query_params["user_email"]
                 }
 
                 # Step 1: Upload the data to BigQuery
-                upload_response = requests.post(f'{FLASK_SERVER_URL}/upload_data_prophet', json=upload_payload)
+                upload_response = requests.post(f'{FLASK_SERVER_URL}/upload_data_prophet', verify=os.environ.get("CERTIFICATE_PATH", False), json=upload_payload)
 
                 if upload_response.status_code == 200:
                     st.success("Data uploaded to BigQuery successfully!")
@@ -1519,11 +1533,12 @@ def run_prophet_training():
                         "identifier_column": identifier_column,
                         "forecast_horizon": int(forecast_horizon),
                         "feature_names": feature_names,
+                        "user_email" : st.query_params["user_email"]
                     }
 
                     # Step 2: Start the processing and training pipeline
                     try:
-                        process_response = requests.post(f'{FLASK_SERVER_URL}/process_and_train', json=process_payload)
+                        process_response = requests.post(f'{FLASK_SERVER_URL}/process_and_train', verify=os.environ.get("CERTIFICATE_PATH", False), json=process_payload)
 
                         if process_response.status_code == 200:
                             st.success("Training pipeline completed!")
@@ -1579,10 +1594,11 @@ def run_prophet_batch_predictions(model_name):
                 "csv_data": csv_data,
                 "date_column": date_column,
                 "identifier_column": identifier_column,
+                "user_email": st.query_params["user_email"]
             }
 
             # Step 1: Upload the data to BigQuery
-            upload_response = requests.post(f'{FLASK_SERVER_URL}/upload_data_prophet', json=upload_payload)
+            upload_response = requests.post(f'{FLASK_SERVER_URL}/upload_data_prophet', verify=os.environ.get("CERTIFICATE_PATH", False), json=upload_payload)
 
             if upload_response.status_code == 200:
                 st.success("Data uploaded to BigQuery successfully!")
@@ -1603,10 +1619,11 @@ def run_prophet_batch_predictions(model_name):
                     "identifier_column": identifier_column,
                     "forecast_horizon": int(forecast_horizon),
                     "feature_names": feature_names,
+                    "user_email": st.query_params["user_email"]
                 }
 
                 # Step 2: Start the processing and training pipeline
-                process_response = requests.post(f'{FLASK_SERVER_URL}/prophet_batch_predictions', json=process_payload)
+                process_response = requests.post(f'{FLASK_SERVER_URL}/prophet_batch_predictions', verify=os.environ.get("CERTIFICATE_PATH", False), json=process_payload)
 
                 if process_response.status_code == 200:
                     st.success("Prediction pipeline started successfully!")
@@ -1620,9 +1637,10 @@ def run_prophet_batch_predictions(model_name):
 def deploy_model(endpoint_name, model_resource_name):
     try:
         # Send a POST request with the model resource ID and custom endpoint name
-        response = requests.post(f'{FLASK_SERVER_URL}/deploy_model', json={
+        response = requests.post(f'{FLASK_SERVER_URL}/deploy_model', verify=os.environ.get("CERTIFICATE_PATH", False), json={
             "model_name": model_resource_name, 
-            "endpoint_name": endpoint_name
+            "endpoint_name": endpoint_name,
+            "user_email": st.query_params["user_email"]
         })
         
         if response.status_code == 200:
