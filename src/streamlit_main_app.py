@@ -100,7 +100,7 @@ def main():
             endpoints_response = requests.get(LIST_ENDPOINTS_URL,
                                               verify=os.environ.get("CERTIFICATE_PATH", False),
                                               params=query_string_params)
-            
+
             # models = requests.get(LIST_MODELS_URL).json().get('models', [])
             # endpoints = requests.get(LIST_ENDPOINTS_URL).json().get('endpoints', [])
 
