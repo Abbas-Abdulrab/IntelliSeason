@@ -30,7 +30,7 @@ UPLOAD_DIR = os.path.join(os.getcwd(), 'uploads')
 # Store the token in memory
 global_token = None
 CREDENTIALS = None
-user_info = None
+# user_info = None
 global_model_response = None
 streamlit_process = None
 app = Flask(__name__)
@@ -156,24 +156,6 @@ def callback():
     return redirect("/streamlit")
 
 
-def get_user_info():
-    response = get_or_refresh_token()
-    if isinstance(response, dict) and 'status_code' in response:
-        if response['status_code'] == 200:
-            credentials = response['credentials']
-            # Continue with your BigQuery operations
-        else:
-            # Return an error response to the client or handle it as needed
-            return jsonify({"error": response.get('error', 'Unknown error occurred')}), 401
-    else:
-        # Handle cases where the response is not what we expected
-        return jsonify({"error": "Unexpected response format."}), 500
-    
-        
-    access_token = credentials.token
-    headers = {'Authorization': f'Bearer {access_token}'}
-    userinfo_response = requests.get(user_info_url, headers=headers)
-    return user_info
 # Function to handle date parsing
 def parse_date(date_series):
     possible_formats = [
@@ -195,20 +177,31 @@ def parse_date(date_series):
 
 @app.route('/automl',methods=['POST'])
 def automl():
-    global user_info
-    response = get_or_refresh_token()
+    
+    user_email = request.args.get("user_email")
 
-    # Ensure response is a dictionary and contains the 'status_code' key
-    if isinstance(response, dict) and 'status_code' in response:
-        if response['status_code'] == 200:
-            credentials = response['credentials']
-            # Continue with your BigQuery operations
-        else:
-            # Return an error response to the client or handle it as needed
-            return jsonify({"error": response.get('error', 'Unknown error occurred')}), 401
-    else:
-        # Handle cases where the response is not what we expected
-        return jsonify({"error": "Unexpected response format."}), 500
+    if user_email not in state_store:
+        return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
+
+    curr_user_session = state_store[user_email]
+    response = get_or_refresh_token(curr_user_session)
+    if response['credentials'] is None:
+        return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
+    credentials=response['credentials']
+
+    user_id = curr_user_session["user_info"].get("id", None) 
+
+    # # Ensure response is a dictionary and contains the 'status_code' key
+    # if isinstance(response, dict) and 'status_code' in response:
+    #     if response['status_code'] == 200:
+    #         credentials = response['credentials']
+    #         # Continue with your BigQuery operations
+    #     else:
+    #         # Return an error response to the client or handle it as needed
+    #         return jsonify({"error": response.get('error', 'Unknown error occurred')}), 401
+    # else:
+    #     # Handle cases where the response is not what we expected
+    #     return jsonify({"error": "Unexpected response format."}), 500
     
     file_path = request.form.get('file_path')
     target_column = request.form.get('target_column')
@@ -221,7 +214,7 @@ def automl():
     bucket = storage_client.bucket(bucket_name)
 
     # Upload the CSV file to the bucket
-    blob_name = f"{os.path.basename(file_path).split('.')[0]}_{user_info['id']}.csv"
+    blob_name = f"{os.path.basename(file_path).split('.')[0]}_{user_id}.csv"
     blob = bucket.blob(blob_name)
     blob.upload_from_filename(file_path)
 
@@ -230,23 +223,23 @@ def automl():
 
     # Create dataset
     dataset = aiplatform.TabularDataset.create(
-        display_name=f"{os.path.basename(file_path).split('.')[0]}_{user_info['id']}",
+        display_name=f"{os.path.basename(file_path).split('.')[0]}_{user_id}",
         gcs_source=[f"gs://{bucket_name}/{blob_name}"]
     )
 
     job = aiplatform.AutoMLTabularTrainingJob(
-            display_name=f"training_job_{os.path.basename(file_path).split('.')[0]}_{user_info['id']}",
+            display_name=f"training_job_{os.path.basename(file_path).split('.')[0]}_{user_id}",
             optimization_prediction_type="regression",
             optimization_objective="minimize-rmse"
         )
 
     # Train the model
-    model_display_name=f"model_{os.path.basename(file_path).split('.')[0]}_{user_info['id']}"
+    model_display_name=f"model_{os.path.basename(file_path).split('.')[0]}_{user_id}"
     model = job.run(
         dataset=dataset,
         target_column=target_column,
         budget_milli_node_hours=1000,
-        model_display_name=f"model_{os.path.basename(file_path).split('.')[0]}_{user_info['id']}",
+        model_display_name=f"model_{os.path.basename(file_path).split('.')[0]}_{user_id}",
         disable_early_stopping=False
     )
 
@@ -256,23 +249,20 @@ def automl():
 
 @app.route('/upload_data', methods=['POST'])
 def upload_data():
-    global user_info
-    if not user_info:
-        user_info = get_user_info()
+    user_email = request.args.get("user_email")
 
-    response = get_or_refresh_token()
+    if user_email not in state_store:
+        return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
 
-    # Ensure response is a dictionary and contains the 'status_code' key
-    if isinstance(response, dict) and 'status_code' in response:
-        if response['status_code'] == 200:
-            credentials = response['credentials']
-            # Continue with your BigQuery operations
-        else:
-            # Return an error response to the client or handle it as needed
-            return jsonify({"error": response.get('error', 'Unknown error occurred')}), 401
-    else:
-        # Handle cases where the response is not what we expected
-        return jsonify({"error": "Unexpected response format."}), 500
+    curr_user_session = state_store[user_email]
+    response = get_or_refresh_token(curr_user_session)
+
+    if response['credentials'] is None:
+        return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
+    credentials = response['credentials'] 
+
+    user_id = curr_user_session["user_info"].get("id", None) 
+
 
     client = bigquery.Client(credentials=credentials, project=PROJECT_ID)
     try:
@@ -288,7 +278,7 @@ def upload_data():
         # Initialize BigQuery client
         client = bigquery.Client(credentials=credentials, project=PROJECT_ID)
         train_base_file_name = os.path.splitext(os.path.basename(train_file_path))[0]
-        train_table_id = f"{PROJECT_ID}.{DATA_SET_ID}.{train_base_file_name}_{user_info['id']}"
+        train_table_id = f"{PROJECT_ID}.{DATA_SET_ID}.{train_base_file_name}_{user_id}"
 
         # Define job configuration with auto-detection
         job_config = bigquery.LoadJobConfig(
@@ -324,22 +314,23 @@ def upload_data():
 # Route to delete the BigQuery table after processing
 @app.route('/delete_bigquery_table', methods=['DELETE'])
 def delete_bigquery_table():
-    global user_info
-    response = get_or_refresh_token()
-
-    # Ensure response is a dictionary and contains the 'status_code' key
-    if isinstance(response, dict) and 'status_code' in response:
-        if response['status_code'] == 200:
-            credentials = response['credentials']
-            # Continue with your BigQuery operations
-        else:
-            # Return an error response to the client or handle it as needed
-            return jsonify({"error": response.get('error', 'Unknown error occurred')}), 401
-    else:
-        # Handle cases where the response is not what we expected
-        return jsonify({"error": "Unexpected response format."}), 500
+   
     try:
         request_data = request.json
+        
+        user_email = request_data.get("user_email")
+
+        if user_email not in state_store:
+                    return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
+
+        curr_user_session = state_store[user_email]
+        response = get_or_refresh_token(curr_user_session)
+
+        if response['credentials'] is None:
+                    return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
+
+        credentials = response['credentials'] 
+        user_id = curr_user_session["user_info"].get("id", None) 
         train_file_path = request_data.get('train_file_path')
 
         if not train_file_path:
@@ -347,7 +338,7 @@ def delete_bigquery_table():
 
         client = bigquery.Client(credentials=credentials, project=PROJECT_ID)
         train_base_file_name = os.path.splitext(os.path.basename(train_file_path))[0]
-        train_table_id = f"{PROJECT_ID}.{DATA_SET_ID}.{train_base_file_name}_{user_info['id']}"
+        train_table_id = f"{PROJECT_ID}.{DATA_SET_ID}.{train_base_file_name}_{user_id}"
 
         client.delete_table(train_table_id, not_found_ok=True)
 
@@ -359,21 +350,20 @@ def delete_bigquery_table():
 # Endpoint to handle ARIMA+ forecasting
 @app.route('/run_arima_plus', methods=['GET'])
 def run_arima_plus():
-    global user_info
-    response = get_or_refresh_token()
+    
+    user_email = request.args.get("user_email")
 
-    # Ensure response is a dictionary and contains the 'status_code' key
-    if isinstance(response, dict) and 'status_code' in response:
-        if response['status_code'] == 200:
-            credentials = response['credentials']
-            # Continue with your BigQuery operations
-        else:
-            # Return an error response to the client or handle it as needed
-            return jsonify({"error": response.get('error', 'Unknown error occurred')}), 401
-    else:
-        # Handle cases where the response is not what we expected
-        return jsonify({"error": "Unexpected response format."}), 500
-   
+    if user_email not in state_store:
+                return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
+
+    curr_user_session = state_store[user_email]
+    response = get_or_refresh_token(curr_user_session)
+
+    if response['credentials'] is None:
+                return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
+
+    credentials = response['credentials'] 
+    user_id = curr_user_session["user_info"].get("id", None) 
     client = bigquery.Client(credentials=credentials, project=PROJECT_ID)
     try:
          # Retrieve query parameters
@@ -385,7 +375,7 @@ def run_arima_plus():
         if not date_column or not target_column:
             return jsonify({"error": "Date column and target column are required."}), 400
         base_file_name = os.path.splitext(os.path.basename(train_file_path))[0]
-        train_table_id = f"{PROJECT_ID}.{DATA_SET_ID}.{base_file_name}_{user_info['id']}"
+        train_table_id = f"{PROJECT_ID}.{DATA_SET_ID}.{base_file_name}_{user_id}"
        
         # Create or Replace ARIMA model
         create_model_query = f"""
@@ -427,22 +417,20 @@ def run_arima_plus():
 
 @app.route('/run_arima', methods=['GET'])
 def run_arima():
-    # Replace the global token with your actual token management approach
-    global user_info
-    response = get_or_refresh_token()
+        
+    user_email = request.args.get("user_email")
 
-    # Ensure response is a dictionary and contains the 'status_code' key
-    if isinstance(response, dict) and 'status_code' in response:
-        if response['status_code'] == 200:
-            credentials = response['credentials']
-            # Continue with your BigQuery operations
-        else:
-            # Return an error response to the client or handle it as needed
-            return jsonify({"error": response.get('error', 'Unknown error occurred')}), 401
-    else:
-        # Handle cases where the response is not what we expected
-        return jsonify({"error": "Unexpected response format."}), 500
-    
+    if user_email not in state_store:
+                return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
+
+    curr_user_session = state_store[user_email]
+    response = get_or_refresh_token(curr_user_session)
+
+    if response['credentials'] is None:
+                return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
+
+    credentials = response['credentials'] 
+    user_id = curr_user_session["user_info"].get("id", None) 
     client = bigquery.Client(credentials=credentials, project=PROJECT_ID)
     try:
          # Retrieve query parameters
@@ -453,7 +441,7 @@ def run_arima():
         if not date_column or not target_column:
             return jsonify({"error": "Date column and target column are required."}), 400
         base_file_name = os.path.splitext(os.path.basename(train_file_path))[0]
-        train_table_id = f"{PROJECT_ID}.{DATA_SET_ID}.{base_file_name}_{user_info['id']}"
+        train_table_id = f"{PROJECT_ID}.{DATA_SET_ID}.{base_file_name}_{user_id}"
 
         # Create or Replace ARIMA model
         create_model_query = f"""
@@ -494,23 +482,20 @@ def run_arima():
 @app.route('/model', methods=['POST'])
 def model():
     # Replace the global token with your actual token management approach
-    global user_info    
     
-    response = get_or_refresh_token()
+    user_email = request.json.get("user_email")
 
-    # Ensure response is a dictionary and contains the 'status_code' key
-    if isinstance(response, dict) and 'status_code' in response:
-        if response['status_code'] == 200:
-            credentials = response['credentials']
-            # Continue with your BigQuery operations
-        else:
-            # Return an error response to the client or handle it as needed
-            return jsonify({"error": response.get('error', 'Unknown error occurred')}), 401
-    else:
-        # Handle cases where the response is not what we expected
-        return jsonify({"error": "Unexpected response format."}), 500
-    
-        
+    if user_email not in state_store:
+                return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
+
+    curr_user_session = state_store[user_email]
+    response = get_or_refresh_token(curr_user_session)
+
+    if response['credentials'] is None:
+                return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
+
+    credentials = response['credentials'] 
+    user_id = curr_user_session["user_info"].get("id", None) 
     global_bearer_token = credentials.token
     # Retrieve CSV data, date column, and target column from the request
     csv_data = request.json.get('csv_data')
@@ -584,50 +569,46 @@ def model():
 
 @app.route('/get_model_response')
 def get_model_response():
-    # Replace the global token with your actual token management approach
-    global user_info
-    
-    credentials = get_or_refresh_token()
     global global_model_response
     if not global_model_response:
         return jsonify({"error": "No data available"}), 404
     return jsonify(global_model_response)
 
 
-# Function to get tables based on specific ID pattern
-@app.route('/get_tables',methods=['GET'])
-def get_tables_with_id():
+# # Function to get tables based on specific ID pattern
+# @app.route('/get_tables',methods=['GET'])
+# def get_tables_with_id():
     
-    response = get_or_refresh_token()
+#     response = get_or_refresh_token()
 
-    # Ensure response is a dictionary and contains the 'status_code' key
-    if isinstance(response, dict) and 'status_code' in response:
-        if response['status_code'] == 200:
-            credentials = response['credentials']
-            # Continue with your BigQuery operations
-        else:
-            # Return an error response to the client or handle it as needed
-            return jsonify({"error": response.get('error', 'Unknown error occurred')}), 401
-    else:
-        # Handle cases where the response is not what we expected
-        return jsonify({"error": "Unexpected response format."}), 500
+#     # Ensure response is a dictionary and contains the 'status_code' key
+#     if isinstance(response, dict) and 'status_code' in response:
+#         if response['status_code'] == 200:
+#             credentials = response['credentials']
+#             # Continue with your BigQuery operations
+#         else:
+#             # Return an error response to the client or handle it as needed
+#             return jsonify({"error": response.get('error', 'Unknown error occurred')}), 401
+#     else:
+#         # Handle cases where the response is not what we expected
+#         return jsonify({"error": "Unexpected response format."}), 500
 
-    # credentials.refresh(Request())
-    client = bigquery.Client(credentials=credentials, project="genz-forecast-project")
+#     # credentials.refresh(Request())
+#     client = bigquery.Client(credentials=credentials, project="genz-forecast-project")
    
-    query = f"""
-    SELECT
-        table_name
-    FROM
-        `{PROJECT_ID}.{DATA_SET_ID}.INFORMATION_SCHEMA.TABLES`; 
-    """
-    query_job = client.query(query, location=LOCATION)
-    table_list = []
+#     query = f"""
+#     SELECT
+#         table_name
+#     FROM
+#         `{PROJECT_ID}.{DATA_SET_ID}.INFORMATION_SCHEMA.TABLES`; 
+#     """
+#     query_job = client.query(query, location=LOCATION)
+#     table_list = []
     
-    for table in query_job:
-        table_list.append(table)
-    # return table_list
-    return [row.table_name for row in query_job]
+#     for table in query_job:
+#         table_list.append(table)
+#     # return table_list
+#     return [row.table_name for row in query_job]
 
 #########################
 '''
@@ -636,32 +617,27 @@ prophet - maather
 '''
 @app.route('/predict_prophet', methods=['POST'])
 def predict_prophet():
-    # Replace the global token with your actual token management approach
-    global user_info
+    # Extract data from the incoming request
+    request_data = request.get_json()
+    user_email = request_data.get("user_email")
 
-    response = get_or_refresh_token()
+    if user_email not in state_store:
+                return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
 
-    # Ensure response is a dictionary and contains the 'status_code' key
-    if isinstance(response, dict) and 'status_code' in response:
-        if response['status_code'] == 200:
-            credentials = response['credentials']
-            # Continue with your BigQuery operations
-        else:
-            # Return an error response to the client or handle it as needed
-            return jsonify({"error": response.get('error', 'Unknown error occurred')}), 401
-    else:
-        # Handle cases where the response is not what we expected
-        return jsonify({"error": "Unexpected response format."}), 500
-    
+    curr_user_session = state_store[user_email]
+    response = get_or_refresh_token(curr_user_session)
+
+    if response['credentials'] is None:
+                return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
+
+    credentials = response['credentials'] 
+    user_id = curr_user_session["user_info"].get("id", None) 
     global_bearer_token = credentials.token
     # Check for authentication
     if not global_bearer_token:
         return jsonify({"error": "Not authenticated"}), 401
 
-    # Extract data from the incoming request
-    request_data = request.get_json()
-
-
+    
     # Ensure the request data is valid
     if not request_data:
         return jsonify({"error": "No data provided in request."}), 400
@@ -706,14 +682,8 @@ def list_models():
         return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
 
     curr_user_session = state_store[user_email]
-    print("list-models-method: " + str(curr_user_session))
     response = get_or_refresh_token(curr_user_session)
-    print("creds1: "+str(response['credentials'].token))
-    print("creds: "+str(response['credentials'].refresh_token))
-    print("creds: "+str(response['credentials'].token_uri))
-    print("creds: "+str(response['credentials'].client_id))
-    print("creds1: "+str(response['credentials'].client_secret))
-   
+    
     # Ensure response is a dictionary and contains the 'status_code' key
     # if isinstance(response, dict) and 'status_code' in response:
     #     if response['status_code'] == 200:
@@ -821,6 +791,20 @@ def list_user_endpoints():
 @app.route('/deploy_model', methods=['POST'])
 def deploy_model():
     try:
+        
+        user_email = request.json.get("user_email")
+
+        if user_email not in state_store:
+                    return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
+
+        curr_user_session = state_store[user_email]
+        response = get_or_refresh_token(curr_user_session)
+
+        if response['credentials'] is None:
+                    return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
+
+        credentials = response['credentials'] 
+        user_id = curr_user_session["user_info"].get("id", None) 
         model_name = request.json.get('model_name')
         custom_endpoint_name = request.json.get('endpoint_name')
 
@@ -830,25 +814,22 @@ def deploy_model():
         if not re.match(r'^[A-Za-z0-9_]+$', custom_endpoint_name):
             return jsonify({"error": "Endpoint name can only contain letters, numbers, and underscores, and must not have spaces or brackets."}), 400
 
-        # Fetch user information to get the user ID
-        if global_token is None:
-            return jsonify({"error": "Authentication required."}), 401
-
         # Fetch user information using the access token
-        access_token = global_token.get('access_token')
+        access_token = credentials.token
         if not access_token:
             return jsonify({"error": "Failed to retrieve access token."}), 500
 
         # Call Google's UserInfo endpoint to get user information
         userinfo_endpoint = 'https://www.googleapis.com/oauth2/v1/userinfo'
         headers = {'Authorization': f'Bearer {access_token}'}
-        userinfo_response = requests.get(userinfo_endpoint, headers=headers)
+        # userinfo_response = requests.get(userinfo_endpoint, headers=headers)
 
-        if userinfo_response.status_code != 200:
-            return jsonify({"error": "Failed to fetch user information from token."}), 500
+        # if userinfo_response.status_code != 200:
+        #     return jsonify({"error": "Failed to fetch user information from token."}), 500
 
-        user_info = userinfo_response.json()
-        user_id = user_info.get('id')  # This field contains the unique user ID
+        # user_info = userinfo_response.json()
+        # user_id = user_info.get('id')  # This field contains the unique user ID
+        
         if not user_id:
             return jsonify({"error": "User ID not found in user info."}), 500
 
@@ -905,12 +886,25 @@ def deploy_model():
 @app.route('/delete_endpoint', methods=['POST'])
 def delete_endpoint():
     try:
+        
+        user_email = request.json.get("user_email")
+
+        if user_email not in state_store:
+                    return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
+
+        curr_user_session = state_store[user_email]
+        response = get_or_refresh_token(curr_user_session)
+
+        if response['credentials'] is None:
+                    return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
+
+        credentials = response['credentials'] 
         endpoint_name = request.json.get('endpoint_name')
         if not endpoint_name:
             return jsonify({"error": "Endpoint name is required."}), 400
 
         # Initialize AI Platform
-        aiplatform.init(project=PROJECT_ID, location=LOCATION)
+        aiplatform.init(project=PROJECT_ID, location=LOCATION, credentials=credentials)
 
         # Get the endpoint object
         endpoint = aiplatform.Endpoint(endpoint_name)
@@ -934,8 +928,21 @@ def delete_endpoint():
 
 def get_deployed_model_id(endpoint_resource_name):
     try:
+        user_email = request.args.get("user_email")
+
+        if user_email not in state_store:
+                    return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
+
+        curr_user_session = state_store[user_email]
+        response = get_or_refresh_token(curr_user_session)
+
+        if response['credentials'] is None:
+                    return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
+
+        credentials = response['credentials'] 
+
         # Initialize the AI Platform client
-        aiplatform.init(project=PROJECT_ID, location=LOCATION)
+        aiplatform.init(project=PROJECT_ID, location=LOCATION, credentials=credentials)
 
         # Get the endpoint object
         endpoint = aiplatform.Endpoint(endpoint_resource_name)
@@ -957,64 +964,63 @@ def get_deployed_model_id(endpoint_resource_name):
 
 
 
-@app.route('/list_endpoints', methods=['GET'])
-def list_endpoints():
-    response = get_or_refresh_token()
+# @app.route('/list_endpoints', methods=['GET'])
+# def list_endpoints():
+#     response = get_or_refresh_token()
 
-    # Ensure response is a dictionary and contains the 'status_code' key
-    if isinstance(response, dict) and 'status_code' in response:
-        if response['status_code'] == 200:
-            credentials = response['credentials']
-            # Continue with your BigQuery operations
-        else:
-            # Return an error response to the client or handle it as needed
-            return jsonify({"error": response.get('error', 'Unknown error occurred')}), 401
-    else:
-        # Handle cases where the response is not what we expected
-        return jsonify({"error": "Unexpected response format."}), 500
+#     # Ensure response is a dictionary and contains the 'status_code' key
+#     if isinstance(response, dict) and 'status_code' in response:
+#         if response['status_code'] == 200:
+#             credentials = response['credentials']
+#             # Continue with your BigQuery operations
+#         else:
+#             # Return an error response to the client or handle it as needed
+#             return jsonify({"error": response.get('error', 'Unknown error occurred')}), 401
+#     else:
+#         # Handle cases where the response is not what we expected
+#         return jsonify({"error": "Unexpected response format."}), 500
     
-    global_bearer_token = credentials.token
-    """Fetches the list of deployed endpoints with models from GCP AI Platform."""
-    if not global_bearer_token:
-        return jsonify({"error": "Not authenticated"}), 401
+#     global_bearer_token = credentials.token
+#     """Fetches the list of deployed endpoints with models from GCP AI Platform."""
+#     if not global_bearer_token:
+#         return jsonify({"error": "Not authenticated"}), 401
     
  
-    url = f'https://{LOCATION}-aiplatform.googleapis.com/v1/projects/{PROJECT_ID}/locations/{LOCATION}/endpoints'
+#     url = f'https://{LOCATION}-aiplatform.googleapis.com/v1/projects/{PROJECT_ID}/locations/{LOCATION}/endpoints'
     
-    headers = {
-        "Authorization": f"Bearer {global_bearer_token}",
-        "Content-Type": "application/json"
-    }
+#     headers = {
+#         "Authorization": f"Bearer {global_bearer_token}",
+#         "Content-Type": "application/json"
+#     }
     
-    response = requests.get(url, headers=headers)
+#     response = requests.get(url, headers=headers)
     
-    if response.status_code == 200:
-        endpoints = response.json().get('endpoints', [])
-        # Filter endpoints to include only those with models
-        endpoints_with_models = [endpoint for endpoint in endpoints if endpoint.get('deployedModels')]
+#     if response.status_code == 200:
+#         endpoints = response.json().get('endpoints', [])
+#         # Filter endpoints to include only those with models
+#         endpoints_with_models = [endpoint for endpoint in endpoints if endpoint.get('deployedModels')]
         
-        return jsonify({"endpoints": endpoints_with_models})
-    else:
-        return jsonify({"error": response.text}), response.status_code
+#         return jsonify({"endpoints": endpoints_with_models})
+#     else:
+#         return jsonify({"error": response.text}), response.status_code
 
 
 @app.route('/get_columns', methods=['GET'])
 def get_columns():
-    global user_info
-    response = get_or_refresh_token()
-
-    # Ensure response is a dictionary and contains the 'status_code' key
-    if isinstance(response, dict) and 'status_code' in response:
-        if response['status_code'] == 200:
-            credentials = response['credentials']
-            # Continue with your BigQuery operations
-        else:
-            # Return an error response to the client or handle it as needed
-            return jsonify({"error": response.get('error', 'Unknown error occurred')}), 401
-    else:
-        # Handle cases where the response is not what we expected
-        return jsonify({"error": "Unexpected response format."}), 500
     
+    user_email = request.args.get("user_email")
+
+    if user_email not in state_store:
+                return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
+
+    curr_user_session = state_store[user_email]
+    response = get_or_refresh_token(curr_user_session)
+
+    if response['credentials'] is None:
+                return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
+
+    credentials = response['credentials'] 
+
     global_bearer_token = credentials.token
     """Fetches the required input schema for the given endpoint."""
     endpoint_id = request.args.get('endpoint_id')
@@ -1079,19 +1085,20 @@ def get_columns():
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    response = get_or_refresh_token()
+    
+    
+    user_email = request.args.get("user_email")
 
-    # Ensure response is a dictionary and contains the 'status_code' key
-    if isinstance(response, dict) and 'status_code' in response:
-        if response['status_code'] == 200:
-            credentials = response['credentials']
-            # Continue with your BigQuery operations
-        else:
-            # Return an error response to the client or handle it as needed
-            return jsonify({"error": response.get('error', 'Unknown error occurred')}), 401
-    else:
-        # Handle cases where the response is not what we expected
-        return jsonify({"error": "Unexpected response format."}), 500
+    if user_email not in state_store:
+                return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
+
+    curr_user_session = state_store[user_email]
+    response = get_or_refresh_token(curr_user_session)
+
+    if response['credentials'] is None:
+                return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
+
+    credentials = response['credentials'] 
     
     global_bearer_token = credentials.token
     if not global_bearer_token:
@@ -1130,10 +1137,22 @@ def predict():
 ###############################################
 @app.route('/upload_data_prophet', methods=['POST'])
 def upload_data_prophet():
-    global user_info
-    global global_token
+    
+    user_email = request.args.get("user_email")
 
-    if global_token is None or user_info is None:
+    if user_email not in state_store:
+                return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
+
+    curr_user_session = state_store[user_email]
+    response = get_or_refresh_token(curr_user_session)
+
+    if response['credentials'] is None:
+                return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
+
+    credentials = response['credentials'] 
+    user_id = curr_user_session["user_info"].get("id", None) 
+
+    if credentials.token is None or user_id is None:
         return jsonify({"error": "User not authenticated"}), 401
 
     try:
@@ -1166,7 +1185,6 @@ def upload_data_prophet():
 
         # Name of the table in BigQuery where data will be uploaded
         dataset_name = "training_data"
-        user_id = user_info['id']
         table_name = f"uploaded_{int(time.time())}_{user_id}"
 
         # Step 1: Upload CSV to BigQuery
@@ -1200,10 +1218,22 @@ def upload_data_prophet():
 # Prophet
 @app.route('/process_and_train', methods=['POST'])
 def process_and_train():
-    global user_info
-    global global_token
+    
+    user_email = request.args.get("user_email")
 
-    if global_token is None or user_info is None:
+    if user_email not in state_store:
+                return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
+
+    curr_user_session = state_store[user_email]
+    response = get_or_refresh_token(curr_user_session)
+
+    if response['credentials'] is None:
+                return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
+
+    credentials = response['credentials'] 
+    user_id = curr_user_session["user_info"].get("id", None) 
+
+    if user_id is None:
         return jsonify({"error": "User not authenticated"}), 401
 
     try:
@@ -1274,7 +1304,7 @@ def process_and_train():
 
         # Step 4: Run the training pipeline
         training_table_path = f"{PROJECT_ID}.{dataset_name}.{table_name}"
-        display_name = f"prophet-train-{int(time.time())}-{user_info['id']}"
+        display_name = f"prophet-train-{int(time.time())}-{user_id}"
         BUCKET_NAME = 'genz_v1'
         BUCKET_URI = f"gs://{BUCKET_NAME}"
         # Call your training pipeline function here
