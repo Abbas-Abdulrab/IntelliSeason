@@ -1548,6 +1548,7 @@ def run_prophet_training():
                             st.success("Training pipeline completed!")
                             st.write("Job ID:", process_response.json().get("job_id"))
                         else:
+                            # TODO: User facing errors should be generic and the actual error can be logged on the console
                             st.error(f"Training pipeline: {process_response.text}")
                     except requests.ConnectionError:
                             # Handle connection error and show the custom message

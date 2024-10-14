@@ -1081,9 +1081,8 @@ def get_columns():
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    
-    
-    user_email = request.args.get("user_email")
+    request_data = request.get_json()
+    user_email = request_data.get("user_email")
 
     if user_email not in state_store:
                 return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
@@ -1101,7 +1100,6 @@ def predict():
         return jsonify({"error": "Not authenticated"}), 401
     
     # Parse JSON data correctly
-    request_data = request.get_json()
     data = request_data.get('data')
     endpoint_id = request_data.get('endpoint_id')
 
@@ -1130,11 +1128,13 @@ def predict():
     else:
         return jsonify({"error": response.text}), response.status_code
 
+
 ###############################################
+# TODO: Since the files are given in multipart form data request, we can make it consistent by getting raw JSON or multipart form data
 @app.route('/upload_data_prophet', methods=['POST'])
 def upload_data_prophet():
-    
-    user_email = request.args.get("user_email")
+    data = request.get_json()
+    user_email = data.get("user_email")
 
     if user_email not in state_store:
                 return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
@@ -1152,7 +1152,6 @@ def upload_data_prophet():
         return jsonify({"error": "User not authenticated"}), 401
 
     try:
-        data = request.get_json()
         csv_data = data.get('csv_data')
         date_column = data.get('date_column')
         identifier_column = data.get('identifier_column')
@@ -1164,19 +1163,17 @@ def upload_data_prophet():
         df = pd.read_csv(io.StringIO(csv_data))
 
         # Initialize BigQuery client
-
-
-        response = get_or_refresh_token()
-        if isinstance(response, dict) and 'status_code' in response:
-            if response['status_code'] == 200:
-                credentials = response['credentials']
-                # Continue with your BigQuery operations
-            else:
-                # Return an error response to the client or handle it as needed
-                return jsonify({"error": response.get('error', 'Unknown error occurred')}), 401
-        else:
-            # Handle cases where the response is not what we expected
-            return jsonify({"error": "Unexpected response format."}), 500
+        # response = get_or_refresh_token(curr_user_session)
+        # if isinstance(response, dict) and 'status_code' in response:
+        #     if response['status_code'] == 200:
+        #         credentials = response['credentials']
+        #         # Continue with your BigQuery operations
+        #     else:
+        #         # Return an error response to the client or handle it as needed
+        #         return jsonify({"error": response.get('error', 'Unknown error occurred')}), 401
+        # else:
+        #     # Handle cases where the response is not what we expected
+        #     return jsonify({"error": "Unexpected response format."}), 500
         client = bigquery.Client(project=PROJECT_ID, credentials=credentials)
 
         # Name of the table in BigQuery where data will be uploaded
@@ -1214,8 +1211,8 @@ def upload_data_prophet():
 # Prophet
 @app.route('/process_and_train', methods=['POST'])
 def process_and_train():
-    
-    user_email = request.args.get("user_email")
+    data = request.get_json()
+    user_email = data.get("user_email")
 
     if user_email not in state_store:
                 return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
@@ -1233,7 +1230,6 @@ def process_and_train():
         return jsonify({"error": "User not authenticated"}), 401
 
     try:
-        data = request.get_json()
         table_name = data.get('table_name')  # Get the table name from the previous function
         target_column = data.get('target_column')
         date_column = data.get('date_column')
@@ -1246,17 +1242,17 @@ def process_and_train():
 
         # Initialize BigQuery client
         
-        response = get_or_refresh_token()
-        if isinstance(response, dict) and 'status_code' in response:
-            if response['status_code'] == 200:
-                credentials = response['credentials']
-                # Continue with your BigQuery operations
-            else:
-                # Return an error response to the client or handle it as needed
-                return jsonify({"error": response.get('error', 'Unknown error occurred')}), 401
-        else:
-            # Handle cases where the response is not what we expected
-            return jsonify({"error": "Unexpected response format."}), 500
+        # response = get_or_refresh_token(curr_user_session)
+        # if isinstance(response, dict) and 'status_code' in response:
+        #     if response['status_code'] == 200:
+        #         credentials = response['credentials']
+        #         # Continue with your BigQuery operations
+        #     else:
+        #         # Return an error response to the client or handle it as needed
+        #         return jsonify({"error": response.get('error', 'Unknown error occurred')}), 401
+        # else:
+        #     # Handle cases where the response is not what we expected
+        #     return jsonify({"error": "Unexpected response format."}), 500
         client = bigquery.Client(project=PROJECT_ID, credentials=credentials)
 
         dataset_name = "training_data"
