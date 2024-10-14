@@ -62,7 +62,7 @@ scope = [
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
 
-def get_or_refresh_token():
+def get_or_refresh_token(curr_user_session):
     global global_token
     if not global_token:
         return {"status_code": 401, "error": "Session expired. Please log in again."}
@@ -129,7 +129,7 @@ def callback():
     session['oauth_token'] = token
     session['gcp_user_info'] = google.get(user_info_url).json()
 
-    state_store[session['gcp_user_info']['email']] = session['oauth_token']['access_token']
+    state_store[session['gcp_user_info']['email']] = {"user_info": session['gcp_user_info'], "token_info": session['oauth_token']}
 
     # Save user info in session
     # session['user_info'] = {
@@ -694,37 +694,42 @@ predict/automl/endpoints - Abbas
 '''
 @app.route('/list_models')
 def list_models():
+    user_email = request.args.get("user_email")
 
-    response = get_or_refresh_token()
+    if user_email not in state_store:
+        return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
+
+    curr_user_session = state_store[user_email]
+    response = get_or_refresh_token(curr_user_session)
    
     # Ensure response is a dictionary and contains the 'status_code' key
-    if isinstance(response, dict) and 'status_code' in response:
-        if response['status_code'] == 200:
-            credentials = response['credentials']
-            # Continue with your BigQuery operations
-        else:
-            # Return an error response to the client or handle it as needed
-            return jsonify({"error": response.get('error', 'Unknown error occurred')}), 401
-    else:
-        # Handle cases where the response is not what we expected
-        return jsonify({"error": "Unexpected response format."}), 500
+    # if isinstance(response, dict) and 'status_code' in response:
+    #     if response['status_code'] == 200:
+    #         credentials = response['credentials']
+    #         # Continue with your BigQuery operations
+    #     else:
+    #         # Return an error response to the client or handle it as needed
+    #         return jsonify({"error": response.get('error', 'Unknown error occurred')}), 401
+    # else:
+    #     # Handle cases where the response is not what we expected
+    #     return jsonify({"error": "Unexpected response format."}), 500
     
     
-    global user_info
-    if not user_info:
-        user_info = get_user_info()
+    # global user_info
+    # if not user_info:
+    #     user_info = get_user_info()
 
     try:
         # Ensure a valid token is available
         if global_token is None:
             return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
 
-        user_id = user_info.get('id')  # This field contains the unique user ID
+        user_id = curr_user_session["user_info"].get("id", None)  # user_info.get('id')  # This field contains the unique user ID
         if not user_id:
             return jsonify({"error": "User ID not found in user info."}), 500
         
         # Initialize AI Platform with the credentials
-        aiplatform.init(credentials=credentials, project=PROJECT_ID, location=LOCATION)
+        aiplatform.init(credentials=response['credentials'], project=PROJECT_ID, location=LOCATION)
 
         # List models and filter by user ID
         models = aiplatform.Model.list()
