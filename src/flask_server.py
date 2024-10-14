@@ -18,7 +18,7 @@ from google.cloud import bigquery
 from google.auth.transport.requests import Request
 from google.cloud import storage, aiplatform
 
-from global_state_store import state_store
+from global_state_store import state_store, global_model_response
 from train_pipeline import run_training_pipeline
 
 
@@ -31,7 +31,6 @@ UPLOAD_DIR = os.path.join(os.getcwd(), 'uploads')
 global_token = None
 CREDENTIALS = None
 # user_info = None
-global_model_response = None
 streamlit_process = None
 app = Flask(__name__)
 
@@ -249,7 +248,8 @@ def automl():
 
 @app.route('/upload_data', methods=['POST'])
 def upload_data():
-    user_email = request.args.get("user_email")
+    request_data = request.json
+    user_email = request_data.get("user_email")
 
     if user_email not in state_store:
         return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
@@ -259,19 +259,14 @@ def upload_data():
 
     if response['credentials'] is None:
         return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
-    credentials = response['credentials'] 
-
-    user_id = curr_user_session["user_info"].get("id", None) 
-
+    credentials = response['credentials']
+    user_id = curr_user_session["user_info"].get("id", None)
 
     client = bigquery.Client(credentials=credentials, project=PROJECT_ID)
     try:
-        
-      
         # Retrieve JSON data from request
-        request_data = request.json
         train_file_path = request_data.get('train_file_path')
-       
+
         if not train_file_path:
             return jsonify({"error": "Both train and test data are required."}), 400
 
@@ -292,16 +287,13 @@ def upload_data():
             train_job = client.load_table_from_file(train_file, train_table_id, job_config=job_config)
             train_job.result()  # Wait for the job to complete
 
-        
         # Rearrange the table by timestamp
-
         query = f"""
             CREATE OR REPLACE TABLE `{train_table_id}` AS
             SELECT * FROM `{train_table_id}`
             ORDER BY DATE(Date) ASC;
         """
         query_job = client.query(query)
-
         # query_job.result()  # Wait for the job to complete
 
         return jsonify({"message": "Data uploaded successfully."}), 200
@@ -556,8 +548,11 @@ def model():
         'Content-Type': 'application/json'
     }
 
-    global global_model_response
-    global_model_response = []
+    # TODO: This global_model_response is shared between users, which can result in a user seeing more results than what
+    # TODO: He asked for. To fix this, we should return the data in the response so streamlit can send it back to
+    # TODO: get_model_response controller.
+    # Clearing the list
+    global_model_response.clear()
     for payload in payloads:
         response = requests.post(model_url, headers=headers, data=payload)
         if response.status_code == 200:
@@ -567,9 +562,9 @@ def model():
 
     return jsonify({"message": "Model run completed successfully."})
 
+
 @app.route('/get_model_response')
 def get_model_response():
-    global global_model_response
     if not global_model_response:
         return jsonify({"error": "No data available"}), 404
     return jsonify(global_model_response)

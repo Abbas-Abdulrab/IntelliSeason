@@ -824,6 +824,8 @@ def run_times_fm():
                         'user_email': st.query_params["user_email"]
                     })
 
+                    print(f'[DEBUG] POST Request sent to {os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/model')
+
 
                     if response.status_code == 200:
                         query_string_params = {"user_email": st.query_params["user_email"]}
@@ -842,6 +844,8 @@ def run_times_fm():
                             return
                     else:
                         st.error("Failed to send data to the model.")
+                        if "error" in response.json():
+                            print(response.json())
                         return
                     if global_times_fm_model_response:
                         mean_forecasts = []
