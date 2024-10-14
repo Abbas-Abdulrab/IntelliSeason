@@ -19,4 +19,5 @@ db-dtypes==1.3.0
 kfp==2.7.0
 google-cloud-pipeline-components==2.16.1
 python-dotenv==1.0.1
-
+uvicorn==0.31.1
+asgiref==3.8.1

@@ -63,19 +63,25 @@ os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
 
 def get_or_refresh_token(curr_user_session):
-    global global_token
+    global_token = curr_user_session
+    print("getor-method: " + str(curr_user_session))
     if not global_token:
         return {"status_code": 401, "error": "Session expired. Please log in again."}
 
     # Use the existing global_token to create credentials
     credentials = Credentials(
-        token=global_token['access_token'],
-        refresh_token=global_token['refresh_token'],
+        token=global_token['token_info']['access_token'],
+        refresh_token=global_token['token_info']['refresh_token'],
         token_uri=token_url,  # Token URL to refresh the token
         client_id=client_id,
         client_secret=client_secret,
     )
 
+    print("creds: "+str(credentials.token))
+    print("creds: "+str(credentials.refresh_token))
+    print("creds: "+str(credentials.token_uri))
+    print("creds: "+str(credentials.client_id))
+    print("creds: "+str(credentials.client_secret))
     # Check if the credentials are expired and refresh if necessary
     if credentials.expired:
         try:
@@ -700,7 +706,13 @@ def list_models():
         return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
 
     curr_user_session = state_store[user_email]
+    print("list-models-method: " + str(curr_user_session))
     response = get_or_refresh_token(curr_user_session)
+    print("creds1: "+str(response['credentials'].token))
+    print("creds: "+str(response['credentials'].refresh_token))
+    print("creds: "+str(response['credentials'].token_uri))
+    print("creds: "+str(response['credentials'].client_id))
+    print("creds1: "+str(response['credentials'].client_secret))
    
     # Ensure response is a dictionary and contains the 'status_code' key
     # if isinstance(response, dict) and 'status_code' in response:
@@ -721,7 +733,7 @@ def list_models():
 
     try:
         # Ensure a valid token is available
-        if global_token is None:
+        if response['credentials'] is None:
             return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
 
         user_id = curr_user_session["user_info"].get("id", None)  # user_info.get('id')  # This field contains the unique user ID
@@ -743,6 +755,68 @@ def list_models():
 
     except Exception as e:
         return jsonify({"error": f"Failed to list models: {e}"}), 500
+    
+@app.route('/list_user_endpoints')
+def list_user_endpoints():
+    # global global_token
+    
+    # if not user_info:
+    #     user_info = get_user_info()
+    # try:
+        
+    #     response = get_or_refresh_token()
+
+    #     # Ensure response is a dictionary and contains the 'status_code' key
+    #     if isinstance(response, dict) and 'status_code' in response:
+    #         if response['status_code'] == 200:
+    #             credentials = response['credentials']
+    #             # Continue with your BigQuery operations
+    #         else:
+    #             # Return an error response to the client or handle it as needed
+    #             return jsonify({"error": response.get('error', 'Unknown error occurred')}), 401
+    #     else:
+    #         # Handle cases where the response is not what we expected
+    #         return jsonify({"error": "Unexpected response format."}), 500
+
+        user_email = request.args.get("user_email")
+
+        if user_email not in state_store:
+            return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
+
+        curr_user_session = state_store[user_email]
+        print("list-models-method: " + str(curr_user_session))
+        response = get_or_refresh_token(curr_user_session)       
+        print("response = "+str(response))
+        # global_token = credentials.token
+        access_token = response['credentials'].token
+
+        if not access_token:
+            return jsonify({"error": "Failed to retrieve access token."}), 500
+
+        user_id = curr_user_session["user_info"].get("id", None)  # user_info.get('id')  # This field contains the unique user ID
+        if not user_id:
+            return jsonify({"error": "User ID not found in user info."}), 500
+        
+        # user_id = user_info.get('id')  # Extract the user ID from the response
+
+        # if not user_id:
+        #     return jsonify({"error": "User ID not found in user info."}), 500
+        print("creds2: "+str(response['credentials'].token))
+        print("creds: "+str(response['credentials'].refresh_token))
+        print("creds: "+str(response['credentials'].token_uri))
+        print("creds: "+str(response['credentials'].client_id))
+        print("cred2: "+str(response['credentials'].client_secret))
+        aiplatform.init(credentials=response['credentials'], project=PROJECT_ID, location=LOCATION)
+        existing_endpoints = aiplatform.Endpoint.list()
+        user_endpoints = [
+            {"display_name": ep.display_name, "resource_name": ep.resource_name}
+            for ep in existing_endpoints if user_id in ep.display_name
+        ]
+
+        return jsonify({"endpoints": user_endpoints}), 200
+
+    # except Exception as e:
+    #     return jsonify({"error": f"Failed to list user endpoints: {e}"}), 500
 
 @app.route('/deploy_model', methods=['POST'])
 def deploy_model():
@@ -827,50 +901,6 @@ def deploy_model():
     except Exception as e:
         return jsonify({"error": f"Failed to deploy model: {e}"}), 500
 
-@app.route('/list_user_endpoints')
-def list_user_endpoints():
-    # global global_token
-    
-    global user_info
-    if not user_info:
-        user_info = get_user_info()
-    try:
-        
-        response = get_or_refresh_token()
-
-        # Ensure response is a dictionary and contains the 'status_code' key
-        if isinstance(response, dict) and 'status_code' in response:
-            if response['status_code'] == 200:
-                credentials = response['credentials']
-                # Continue with your BigQuery operations
-            else:
-                # Return an error response to the client or handle it as needed
-                return jsonify({"error": response.get('error', 'Unknown error occurred')}), 401
-        else:
-            # Handle cases where the response is not what we expected
-            return jsonify({"error": "Unexpected response format."}), 500
-                
-        global_token = credentials.token
-        access_token = global_token
-        if not access_token:
-            return jsonify({"error": "Failed to retrieve access token."}), 500
-
-        user_id = user_info.get('id')  # Extract the user ID from the response
-
-        if not user_id:
-            return jsonify({"error": "User ID not found in user info."}), 500
-
-        aiplatform.init(project=PROJECT_ID, location=LOCATION)
-        existing_endpoints = aiplatform.Endpoint.list()
-        user_endpoints = [
-            {"display_name": ep.display_name, "resource_name": ep.resource_name}
-            for ep in existing_endpoints if user_id in ep.display_name
-        ]
-
-        return jsonify({"endpoints": user_endpoints}), 200
-
-    except Exception as e:
-        return jsonify({"error": f"Failed to list user endpoints: {e}"}), 500
 
 @app.route('/delete_endpoint', methods=['POST'])
 def delete_endpoint():
