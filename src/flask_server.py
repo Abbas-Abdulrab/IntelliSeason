@@ -64,26 +64,13 @@ os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
 
 def get_or_refresh_token(curr_user_session):
+    user_email = request.form.get("user_email")
+
     global_token = curr_user_session
     print("getor-method: " + str(curr_user_session))
     if not global_token:
         return {"status_code": 401, "error": "Session expired. Please log in again."}
 
-    if credentials.expired:
-        try:
-            credentials = credentials.refresh(Request())
-            # Update the global token and session with the new access token
-            # global_token = credentials.token
-            # Update the global token with the new access token
-            global_token = {
-                'access_token': credentials.token,
-                'refresh_token': credentials.refresh_token
-            }
-        
-            # session['oauth_token'] = global_token  # Update the session
-        except Exception as e:
-            return {"status_code": 401, "error": "Failed to refresh token. Please log in again."}
-        
     # Use the existing global_token to create credentials
     credentials = Credentials(
         token=global_token['token_info']['access_token'],
@@ -99,7 +86,23 @@ def get_or_refresh_token(curr_user_session):
     print("creds: "+str(credentials.client_id))
     print("creds: "+str(credentials.client_secret))
     # Check if the credentials are expired and refresh if necessary
-    
+    if credentials.expired:
+        try:
+            # Attempt to refresh the token
+            credentials.refresh(Request())
+            
+            # Update the session and state_store with the new access token
+            global_token['access_token'] = credentials.token
+
+            return {"status_code": 200, "credentials": credentials}
+        
+        except Exception as e:
+            # Failed to refresh token, delete user's session info from state_store
+            del state_store[user_email]
+            
+            # Return error response indicating re-login is needed
+            return {"status_code": 401, "error": "Failed to refresh token. Please log in again."}
+
 
     return {"status_code": 200, "credentials": credentials}
 
