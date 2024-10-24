@@ -499,46 +499,49 @@ def run_arima_plus_model():
 
                         response = requests.get(f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/run_arima_plus', verify=os.environ.get("CERTIFICATE_PATH", False), params=params)
                         if response.ok:
-                            forecast_df = pd.DataFrame(response.json())
+                            try:
+                                forecast_df = pd.DataFrame(response.json())
 
-                            # Separate historical and forecast data
-                            forecast_only_df = forecast_df[forecast_df['time_series_type'] == 'forecast']
-                            history_only_df = forecast_df[forecast_df['time_series_type'] == 'history']
+                                # Separate historical and forecast data
+                                forecast_only_df = forecast_df[forecast_df['time_series_type'] == 'forecast']
+                                history_only_df = forecast_df[forecast_df['time_series_type'] == 'history']
 
-                            # Rename columns to align with data
-                            forecast_only_df = forecast_only_df.rename(columns={'time_series_timestamp': date_column, 'time_series_data': 'value'})
-                            history_only_df = history_only_df.rename(columns={'time_series_timestamp': date_column, 'time_series_data': 'value'})
-                            last_train_date = train_df[date_column].max()
-                            forecast_only_df[date_column] = pd.date_range(start=last_train_date + pd.Timedelta(days=1), periods=len(forecast_only_df), freq='D')
+                                # Rename columns to align with data
+                                forecast_only_df = forecast_only_df.rename(columns={'time_series_timestamp': date_column, 'time_series_data': 'value'})
+                                history_only_df = history_only_df.rename(columns={'time_series_timestamp': date_column, 'time_series_data': 'value'})
+                                last_train_date = train_df[date_column].max()
+                                forecast_only_df[date_column] = pd.date_range(start=last_train_date + pd.Timedelta(days=1), periods=len(forecast_only_df), freq='D')
 
-                            st.subheader("Forecast Results:")
-                            st.dataframe(forecast_only_df[[date_column, 'value']], use_container_width=True)
+                                st.subheader("Forecast Results:")
+                                st.dataframe(forecast_only_df[[date_column, 'value']], use_container_width=True)
 
-                            st.divider()
-                            plot_forecast(train_df, test_df, forecast_only_df, date_column, target_column)
-                            
-                            st.divider()
-                            trimmed_forecast_df = forecast_only_df.iloc[:len(test_df)].copy()
-                            y_true = test_df[target_column].values
-                            y_pred = trimmed_forecast_df['value'].values
-                            calculate_accuracy(y_true,y_pred, flag=True)
-                            st.divider()
-                            decompose_time_series2(df, target_column, date_column, duplicated_flag)
-                            st.divider()
+                                st.divider()
+                                plot_forecast(train_df, test_df, forecast_only_df, date_column, target_column)
+                                
+                                st.divider()
+                                trimmed_forecast_df = forecast_only_df.iloc[:len(test_df)].copy()
+                                y_true = test_df[target_column].values
+                                y_pred = trimmed_forecast_df['value'].values
+                                calculate_accuracy(y_true,y_pred, flag=True)
+                                st.divider()
+                                decompose_time_series2(df, target_column, date_column, duplicated_flag)
+                                st.divider()
 
-                            # Download forecast as CSV
-                            csv_forecast = forecast_only_df[[date_column, 'value']].to_csv(index=False)
-                            st.download_button(
-                                label="Download data as CSV",
-                                data=csv_forecast,
-                                file_name='predictions.csv',
-                                mime='text/csv'
-                            )
+                                # Download forecast as CSV
+                                csv_forecast = forecast_only_df[[date_column, 'value']].to_csv(index=False)
+                                st.download_button(
+                                    label="Download data as CSV",
+                                    data=csv_forecast,
+                                    file_name='predictions.csv',
+                                    mime='text/csv'
+                                )
 
-                            # After the model finishes, delete the file from BigQuery and local directory
-                            requests.delete(f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/delete_bigquery_table', verify=os.environ.get("CERTIFICATE_PATH", False), json={'train_file_path': train_file_path, 'user_email': st.query_params["user_email"]})
-                            os.remove(train_file_path)
-                            os.remove(clean_file_path)
+                                # After the model finishes, delete the file from BigQuery and local directory
+                                requests.delete(f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/delete_bigquery_table', verify=os.environ.get("CERTIFICATE_PATH", False), json={'train_file_path': train_file_path, 'user_email': st.query_params["user_email"]})
+                                os.remove(train_file_path)
+                                os.remove(clean_file_path)
+                            except Exception as e:
+                                st.error(f'Error forcasting using ARIMA Plus: {e}')
                     elif response.status_code == 401:
                         error_message = response.json().get('error')
                         st.error(error_message)
@@ -817,15 +820,34 @@ def run_times_fm():
                     times_fm_train_csv_buffer.seek(0)
 
                     # Send training data to the model
-                    response = requests.post(f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/model', verify=os.environ.get("CERTIFICATE_PATH", False), json={
-                        'csv_data': times_fm_train_csv_buffer.getvalue(),
-                        'date_column': times_fm_date_column,
-                        'target_column': times_fm_actual_column, 
-                        'user_email': st.query_params["user_email"]
-                    })
+                    try:
+                        response = requests.post(f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/model', verify=os.environ.get("CERTIFICATE_PATH", False), json={
+                            'csv_data': times_fm_train_csv_buffer.getvalue(),
+                            'date_column': times_fm_date_column,
+                            'target_column': times_fm_actual_column, 
+                            'user_email': st.query_params["user_email"]
+                        })
 
-                    print(f'[DEBUG] POST Request sent to {os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/model')
+                        print(f'[DEBUG] POST Request sent to {os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/model')
 
+                        # Check if the response is successful
+                        response.raise_for_status()  # Raise an error for bad responses (4xx or 5xx)
+
+                    # Handle HTTP error (e.g., 404, 500)
+                    except requests.exceptions.HTTPError as http_err:
+                        print(f'[ERROR] HTTP error occurred while sending training data to the tinesfm: {http_err}')
+                    # Handle connection errors (e.g., server not reachable)
+                    except requests.exceptions.ConnectionError as conn_err:
+                        print(f'[ERROR] Connection error occurred while sending training data to the tinesfm: {conn_err}')
+                    # Handle timeout errors
+                    except requests.exceptions.Timeout as timeout_err:
+                        print(f'[ERROR] Timeout error occurred while sending training data to the tinesfm: {timeout_err}')
+                    # Handle any other request-related exceptions    
+                    except requests.exceptions.RequestException as req_err:
+                        print(f'[ERROR] An error occurred while sending training data to the tinesfm: {req_err}')
+                    # Handle any other exceptions    
+                    except Exception as e:
+                        print(f'[ERROR] An unexpected error occurred while sending training data to the tinesfm: {e}')
 
                     if response.status_code == 200:
                         query_string_params = {"user_email": st.query_params["user_email"]}
@@ -987,7 +1009,18 @@ def run_auto_ml():
                         }
                         
                         # st.write("Fetching forecast data... you can deploy it and use it from History Page")
-
+                    else:
+                        error_message = f"Training automl failed with status code {response.status_code}."
+                        if response.status_code == 400:
+                            error_detail = response.json().get("error", "Invalid input data.")
+                            error_message += f" Error details: {error_detail}"
+                        elif response.status_code == 404:
+                            error_message += " The model endpoint was not found."
+                        elif response.status_code == 500:
+                            error_message += " Internal server error occurred. Please try again later."
+                        else:
+                            error_message += " An unexpected error occurred."
+                        st.error(f"[ERROR] {error_message}")
 
 def fetch_get_data_from_flask(endpoint):
     try:
