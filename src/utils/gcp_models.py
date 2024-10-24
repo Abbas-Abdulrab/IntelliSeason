@@ -955,7 +955,7 @@ def run_auto_ml():
             cleaned_file_path = os.path.join(specific_dir, f"cleaned_{uploaded_file.name}")
             
             if st.button('Start AutoML Training'):
-                with st.spinner('Training in progress... This may take up to 2.5 hours depending on the data . You will be notified by email once training is complete.'):
+                with st.spinner('Submitting training request...'):
                     
                     df.columns = df.columns.str.replace(' ', '_').str.replace(r'\(.*?\)', '', regex=True)
                     df[date_column] = df[date_column].apply(parse_date)
@@ -975,7 +975,7 @@ def run_auto_ml():
                     response = requests.post(f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/automl', verify=os.environ.get("CERTIFICATE_PATH", False), data=data)
 
                     if response.status_code == 200:
-                        st.success("Model finished training successfully")
+                        st.success("Training in progress... This may take up to 2.5 hours depending on the data . You will be notified by email once training is complete.")
                         response_data = response.json()
                         model_display_name = response_data.get("model_display_name")
                         data = {
@@ -986,7 +986,7 @@ def run_auto_ml():
                             'time_series_identifier': time_series_identifier
                         }
                         
-                        st.write("Fetching forecast data... you can deploy it and use it from History Page")
+                        # st.write("Fetching forecast data... you can deploy it and use it from History Page")
 
 
 def fetch_get_data_from_flask(endpoint):

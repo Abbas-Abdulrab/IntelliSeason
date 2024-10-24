@@ -17,13 +17,15 @@ from google.oauth2.credentials import Credentials
 from google.cloud import bigquery
 from google.auth.transport.requests import Request
 from google.cloud import storage, aiplatform
-
+from concurrent.futures import ThreadPoolExecutor
+import threading
 from global_state_store import state_store, global_model_response
-from train_pipeline import run_training_pipeline
+# from train_pipeline import run_training_pipeline
 
 
 # Load the environment variables from .env file
 load_dotenv()
+executor = ThreadPoolExecutor(max_workers=2)
 
 
 UPLOAD_DIR = os.path.join(os.getcwd(), 'uploads')
@@ -67,6 +69,21 @@ def get_or_refresh_token(curr_user_session):
     if not global_token:
         return {"status_code": 401, "error": "Session expired. Please log in again."}
 
+    if credentials.expired:
+        try:
+            credentials = credentials.refresh(Request())
+            # Update the global token and session with the new access token
+            # global_token = credentials.token
+            # Update the global token with the new access token
+            global_token = {
+                'access_token': credentials.token,
+                'refresh_token': credentials.refresh_token
+            }
+        
+            # session['oauth_token'] = global_token  # Update the session
+        except Exception as e:
+            return {"status_code": 401, "error": "Failed to refresh token. Please log in again."}
+        
     # Use the existing global_token to create credentials
     credentials = Credentials(
         token=global_token['token_info']['access_token'],
@@ -82,20 +99,7 @@ def get_or_refresh_token(curr_user_session):
     print("creds: "+str(credentials.client_id))
     print("creds: "+str(credentials.client_secret))
     # Check if the credentials are expired and refresh if necessary
-    if credentials.expired:
-        try:
-            credentials = credentials.refresh(Request())
-            # Update the global token and session with the new access token
-            # global_token = credentials.token
-            # Update the global token with the new access token
-            global_token = {
-                'access_token': credentials.token,
-                'refresh_token': credentials.refresh_token
-            }
-        
-            # session['oauth_token'] = global_token  # Update the session
-        except Exception as e:
-            return {"status_code": 401, "error": "Failed to refresh token. Please log in again."}
+    
 
     return {"status_code": 200, "credentials": credentials}
 
@@ -175,11 +179,69 @@ def parse_date(date_series):
     return date_series.apply(try_parse_single_date)
 
 
-@app.route('/automl',methods=['POST'])
-def automl():
-    # TODO: Waiting for the model to be trained should be async and the control should be returned to the app
-    user_email = request.form.get("user_email")
+# @app.route('/automl',methods=['POST'])
+# def automl():
+#     # TODO: Waiting for the model to be trained should be async and the control should be returned to the app
+#     user_email = request.form.get("user_email")
 
+#     if user_email not in state_store:
+#         return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
+
+#     curr_user_session = state_store[user_email]
+#     response = get_or_refresh_token(curr_user_session)
+#     if response['credentials'] is None:
+#         return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
+#     credentials=response['credentials']
+
+#     user_id = curr_user_session["user_info"].get("id", None) 
+
+#     file_path = request.form.get('file_path')
+#     target_column = request.form.get('target_column')
+#     date_column = request.form.get('date_column')
+
+#     if not file_path or not os.path.exists(file_path):
+#         return "Invalid file path", 400
+    
+#     storage_client = storage.Client(project=PROJECT_ID, credentials=credentials)
+#     bucket = storage_client.bucket(bucket_name)
+
+#     # Upload the CSV file to the bucket
+#     blob_name = f"{os.path.basename(file_path).split('.')[0]}_{user_id}.csv"
+#     blob = bucket.blob(blob_name)
+#     blob.upload_from_filename(file_path)
+
+#     # Initialize Vertex AI client
+#     aiplatform.init(project=PROJECT_ID, location='europe-west1', credentials=credentials)
+
+#     # Create dataset
+#     dataset = aiplatform.TabularDataset.create(
+#         display_name=f"{os.path.basename(file_path).split('.')[0]}_{user_id}",
+#         gcs_source=[f"gs://{bucket_name}/{blob_name}"]
+#     )
+
+#     job = aiplatform.AutoMLTabularTrainingJob(
+#             display_name=f"training_job_{os.path.basename(file_path).split('.')[0]}_{user_id}",
+#             optimization_prediction_type="regression",
+#             optimization_objective="minimize-rmse"
+#         )
+
+#     # Train the model
+#     model_display_name=f"model_{os.path.basename(file_path).split('.')[0]}_{user_id}"
+#     model = job.run(
+#         dataset=dataset,
+#         target_column=target_column,
+#         budget_milli_node_hours=1000,
+#         model_display_name=f"model_{os.path.basename(file_path).split('.')[0]}_{user_id}",
+#         disable_early_stopping=False
+#     )
+
+#     return jsonify({"model_display_name": model_display_name})
+#     # return f"Successfully uploaded {os.path.basename(file_path)} to Google Cloud Storage and started AutoML training."
+
+@app.route('/automl', methods=['POST'])
+def automl():
+    user_email = request.form.get("user_email")
+    
     if user_email not in state_store:
         return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
 
@@ -187,21 +249,9 @@ def automl():
     response = get_or_refresh_token(curr_user_session)
     if response['credentials'] is None:
         return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
-    credentials=response['credentials']
+    credentials = response['credentials']
 
-    user_id = curr_user_session["user_info"].get("id", None) 
-
-    # # Ensure response is a dictionary and contains the 'status_code' key
-    # if isinstance(response, dict) and 'status_code' in response:
-    #     if response['status_code'] == 200:
-    #         credentials = response['credentials']
-    #         # Continue with your BigQuery operations
-    #     else:
-    #         # Return an error response to the client or handle it as needed
-    #         return jsonify({"error": response.get('error', 'Unknown error occurred')}), 401
-    # else:
-    #     # Handle cases where the response is not what we expected
-    #     return jsonify({"error": "Unexpected response format."}), 500
+    user_id = curr_user_session["user_info"].get("id", None)
     
     file_path = request.form.get('file_path')
     target_column = request.form.get('target_column')
@@ -209,43 +259,47 @@ def automl():
 
     if not file_path or not os.path.exists(file_path):
         return "Invalid file path", 400
-    
+
+    # Start the training job in a separate thread
+    executor.submit(run_automl_training, file_path, target_column, date_column, credentials, user_id)
+
+    return jsonify({"message": "Training started in the background. You will be notified when it completes."}), 200
+
+
+def run_automl_training(file_path, target_column, date_column, credentials, user_id):
+    # Upload file to GCS and start training
     storage_client = storage.Client(project=PROJECT_ID, credentials=credentials)
     bucket = storage_client.bucket(bucket_name)
 
-    # Upload the CSV file to the bucket
     blob_name = f"{os.path.basename(file_path).split('.')[0]}_{user_id}.csv"
     blob = bucket.blob(blob_name)
     blob.upload_from_filename(file_path)
 
-    # Initialize Vertex AI client
     aiplatform.init(project=PROJECT_ID, location='europe-west1', credentials=credentials)
 
-    # Create dataset
     dataset = aiplatform.TabularDataset.create(
         display_name=f"{os.path.basename(file_path).split('.')[0]}_{user_id}",
         gcs_source=[f"gs://{bucket_name}/{blob_name}"]
     )
 
     job = aiplatform.AutoMLTabularTrainingJob(
-            display_name=f"training_job_{os.path.basename(file_path).split('.')[0]}_{user_id}",
-            optimization_prediction_type="regression",
-            optimization_objective="minimize-rmse"
-        )
+        display_name=f"training_job_{os.path.basename(file_path).split('.')[0]}_{user_id}",
+        optimization_prediction_type="regression",
+        optimization_objective="minimize-rmse"
+    )
 
-    # Train the model
-    model_display_name=f"model_{os.path.basename(file_path).split('.')[0]}_{user_id}"
+    model_display_name = f"model_{os.path.basename(file_path).split('.')[0]}_{user_id}"
     model = job.run(
         dataset=dataset,
         target_column=target_column,
         budget_milli_node_hours=1000,
-        model_display_name=f"model_{os.path.basename(file_path).split('.')[0]}_{user_id}",
+        model_display_name=model_display_name,
         disable_early_stopping=False
     )
 
-    return jsonify({"model_display_name": model_display_name})
-    # return f"Successfully uploaded {os.path.basename(file_path)} to Google Cloud Storage and started AutoML training."
-
+    # You can notify the user here via email when the training is complete
+    # e.g., send_email_notification(user_email, model_display_name)
+    print(f"Training completed for model: {model_display_name}")
 
 @app.route('/upload_data', methods=['POST'])
 def upload_data():
