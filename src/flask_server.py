@@ -781,83 +781,64 @@ def list_models():
     
 @app.route('/list_user_endpoints')
 def list_user_endpoints():
-    # global global_token
-    
-    # if not user_info:
-    #     user_info = get_user_info()
-    # try:
-        
-    #     response = get_or_refresh_token()
+    user_email = request.args.get("user_email")
 
-    #     # Ensure response is a dictionary and contains the 'status_code' key
-    #     if isinstance(response, dict) and 'status_code' in response:
-    #         if response['status_code'] == 200:
-    #             credentials = response['credentials']
-    #             # Continue with your BigQuery operations
-    #         else:
-    #             # Return an error response to the client or handle it as needed
-    #             return jsonify({"error": response.get('error', 'Unknown error occurred')}), 401
-    #     else:
-    #         # Handle cases where the response is not what we expected
-    #         return jsonify({"error": "Unexpected response format."}), 500
+    if user_email not in state_store:
+        return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
 
-        user_email = request.args.get("user_email")
+    curr_user_session = state_store[user_email]
+    print("list-models-method: " + str(curr_user_session))
+    response = get_or_refresh_token(curr_user_session)
+    print("response = " + str(response))
+
+    access_token = response['credentials'].token
+
+    if not access_token:
+        return jsonify({"error": "Failed to retrieve access token."}), 500
+
+    user_id = curr_user_session["user_info"].get("id", None)
+    if not user_id:
+        return jsonify({"error": "User ID not found in user info."}), 500
+
+    # Initialize AI Platform with the user's credentials
+    aiplatform.init(credentials=response['credentials'], project=PROJECT_ID, location=LOCATION)
+    existing_endpoints = aiplatform.Endpoint.list()
+
+    user_endpoints = [
+        {
+            "display_name": ep.display_name,
+            "resource_name": ep.resource_name,
+            "deployed_models": [
+                {
+                    "model": model.model,
+                    "display_name": model.display_name,
+                    "model_version_id": model.model_version_id,
+                }
+                for model in ep.deployed_models
+            ],
+        }
+        for ep in existing_endpoints
+        if user_id in ep.display_name and len(ep.deployed_models) > 0
+    ]
+
+    return jsonify({"endpoints": user_endpoints}), 200
+
+@app.route('/deploy_model', methods=['POST'])
+def deploy_model():
+    try:
+        user_email = request.json.get("user_email")
 
         if user_email not in state_store:
             return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
 
         curr_user_session = state_store[user_email]
-        print("list-models-method: " + str(curr_user_session))
-        response = get_or_refresh_token(curr_user_session)       
-        print("response = "+str(response))
-        # global_token = credentials.token
-        access_token = response['credentials'].token
-
-        if not access_token:
-            return jsonify({"error": "Failed to retrieve access token."}), 500
-
-        user_id = curr_user_session["user_info"].get("id", None)  # user_info.get('id')  # This field contains the unique user ID
-        if not user_id:
-            return jsonify({"error": "User ID not found in user info."}), 500
-        
-        # user_id = user_info.get('id')  # Extract the user ID from the response
-
-        # if not user_id:
-        #     return jsonify({"error": "User ID not found in user info."}), 500
-        print("creds2: "+str(response['credentials'].token))
-        print("creds: "+str(response['credentials'].refresh_token))
-        print("creds: "+str(response['credentials'].token_uri))
-        print("creds: "+str(response['credentials'].client_id))
-        print("cred2: "+str(response['credentials'].client_secret))
-        aiplatform.init(credentials=response['credentials'], project=PROJECT_ID, location=LOCATION)
-        existing_endpoints = aiplatform.Endpoint.list()
-        user_endpoints = [
-            {"display_name": ep.display_name, "resource_name": ep.resource_name}
-            for ep in existing_endpoints if user_id in ep.display_name
-        ]
-
-        return jsonify({"endpoints": user_endpoints}), 200
-
-    # except Exception as e:
-    #     return jsonify({"error": f"Failed to list user endpoints: {e}"}), 500
-
-@app.route('/deploy_model', methods=['POST'])
-def deploy_model():
-    try:
-        
-        user_email = request.json.get("user_email")
-
-        if user_email not in state_store:
-                    return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
-
-        curr_user_session = state_store[user_email]
         response = get_or_refresh_token(curr_user_session)
 
         if response['credentials'] is None:
-                    return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
+            return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
 
-        credentials = response['credentials'] 
-        user_id = curr_user_session["user_info"].get("id", None) 
+        credentials = response['credentials']
+        user_id = curr_user_session["user_info"].get("id", None)
         model_name = request.json.get('model_name')
         custom_endpoint_name = request.json.get('endpoint_name')
 
@@ -867,22 +848,10 @@ def deploy_model():
         if not re.match(r'^[A-Za-z0-9_]+$', custom_endpoint_name):
             return jsonify({"error": "Endpoint name can only contain letters, numbers, and underscores, and must not have spaces or brackets."}), 400
 
-        # Fetch user information using the access token
         access_token = credentials.token
         if not access_token:
             return jsonify({"error": "Failed to retrieve access token."}), 500
 
-        # Call Google's UserInfo endpoint to get user information
-        userinfo_endpoint = 'https://www.googleapis.com/oauth2/v1/userinfo'
-        headers = {'Authorization': f'Bearer {access_token}'}
-        # userinfo_response = requests.get(userinfo_endpoint, headers=headers)
-
-        # if userinfo_response.status_code != 200:
-        #     return jsonify({"error": "Failed to fetch user information from token."}), 500
-
-        # user_info = userinfo_response.json()
-        # user_id = user_info.get('id')  # This field contains the unique user ID
-        
         if not user_id:
             return jsonify({"error": "User ID not found in user info."}), 500
 
@@ -893,47 +862,46 @@ def deploy_model():
         existing_endpoints = aiplatform.Endpoint.list()
         user_endpoints = [ep for ep in existing_endpoints if user_id in ep.display_name]
 
-        # Check for duplicate endpoint name (excluding user ID)
+        # Check for duplicate endpoint name
         for ep in user_endpoints:
-            # Extract the custom name by removing '_userID' from the display name
             if ep.display_name.endswith(f"_{user_id}"):
                 existing_custom_name = ep.display_name[:-len(f"_{user_id}")]
                 if existing_custom_name == custom_endpoint_name:
                     return jsonify({"error": f"You already have an endpoint with the name '{custom_endpoint_name}'. Please choose a different name."}), 400
 
-        # Append user ID to the endpoint name
         custom_endpoint_name += f"_{user_id}"
 
-        # Check if the user already has 2 endpoints
         if len(user_endpoints) >= 2:
             return jsonify({"error": "You can only have 2 endpoints. Please delete an existing endpoint before deploying a new one."}), 400
 
-        # Proceed with deploying the model
-        model = aiplatform.Model(model_name=model_name)
-        endpoint = aiplatform.Endpoint.create(display_name=custom_endpoint_name)
-        deployed_model = model.deploy(
-            endpoint=endpoint,
-            deployed_model_display_name=f"{custom_endpoint_name}_deployed_model",
-            machine_type="n1-standard-4",
-            min_replica_count=1,
-            max_replica_count=1
-        )
+        # Deploy model asynchronously
+        try:
+            # Construct the full resource name for the model
+            model_resource_name = f"projects/{PROJECT_ID}/locations/{LOCATION}/models/{model_name}"
+            model = aiplatform.Model(model_name=model_resource_name)
+            endpoint = aiplatform.Endpoint.create(display_name=custom_endpoint_name)
 
-        deployed_model.wait()
+            # Deploy model without waiting for it to complete
+            model.deploy(
+                endpoint=endpoint,
+                deployed_model_display_name=f"{custom_endpoint_name}_deployed_model",
+                machine_type="n1-standard-4",
+                min_replica_count=1,
+                max_replica_count=1,
+                sync=False  # Asynchronous deployment, does not block
+            )
 
-        endpoint_url = f"https://{LOCATION}-aiplatform.googleapis.com/v1/{endpoint.resource_name}"
+            endpoint_info = {
+                "status": "Deployment initiated. This process can take around 15 minutes. You will be notified once the endpoint is available."
+            }
 
-        endpoint_info = {
-            "endpoint_id": endpoint.name.split('/')[-1],
-            "endpoint_display_name": endpoint.display_name,
-            "endpoint_url": endpoint_url,
-            "status": "Deployment successful"
-        }
+            return jsonify(endpoint_info), 202
 
-        return jsonify(endpoint_info), 200
+        except Exception as deployment_error:
+            return jsonify({"error": f"Deployment request failed: {str(deployment_error)}"}), 500
 
     except Exception as e:
-        return jsonify({"error": f"Failed to deploy model: {e}"}), 500
+        return jsonify({"error": f"Failed to initiate deployment: {e}"}), 500
 
 
 @app.route('/delete_endpoint', methods=['POST'])
