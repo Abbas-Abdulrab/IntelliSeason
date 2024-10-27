@@ -8,6 +8,7 @@ import pandas as pd
 import requests
 from datetime import datetime
 from io import StringIO
+import traceback
 
 from asgiref.wsgi import WsgiToAsgi
 from dotenv import load_dotenv
@@ -800,26 +801,41 @@ def list_user_endpoints():
     if not user_id:
         return jsonify({"error": "User ID not found in user info."}), 500
 
-    # Initialize AI Platform with the user's credentials
-    aiplatform.init(credentials=response['credentials'], project=PROJECT_ID, location=LOCATION)
-    existing_endpoints = aiplatform.Endpoint.list()
+    # Build the request URL
+    url = f"https://{LOCATION}-aiplatform.googleapis.com/v1/projects/{PROJECT_ID}/locations/{LOCATION}/endpoints"
 
-    user_endpoints = [
-        {
-            "display_name": ep.display_name,
-            "resource_name": ep.resource_name,
-            "deployed_models": [
-                {
-                    "model": model.model,
-                    "display_name": model.display_name,
-                    "model_version_id": model.model_version_id,
-                }
-                for model in ep.deployed_models
-            ],
-        }
-        for ep in existing_endpoints
-        if user_id in ep.display_name and len(ep.deployed_models) > 0
-    ]
+    headers = {
+        "Authorization": f"Bearer {access_token}"
+    }
+
+    params = {
+        "filter": f"display_name:{user_id}"
+    }
+
+    response = requests.get(url, headers=headers, params=params)
+
+    if response.status_code != 200:
+        return jsonify({"error": f"Failed to retrieve endpoints: {response.text}"}), response.status_code
+
+    endpoints = response.json().get("endpoints", [])
+
+    user_endpoints = []
+
+    for ep in endpoints:
+        deployed_models = ep.get("deployedModels", [])
+        if deployed_models:
+            deployed_models_info = []
+            for model in deployed_models:
+                deployed_models_info.append({
+                    "model": model.get("model"),
+                    "display_name": model.get("displayName"),
+                    "model_version_id": model.get("modelVersionId"),
+                })
+            user_endpoints.append({
+                "display_name": ep.get("displayName"),
+                "resource_name": ep.get("name"),
+                "deployed_models": deployed_models_info,
+            })
 
     return jsonify({"endpoints": user_endpoints}), 200
 
@@ -879,7 +895,7 @@ def deploy_model():
             # Construct the full resource name for the model
             model_resource_name = f"projects/{PROJECT_ID}/locations/{LOCATION}/models/{model_name}"
             model = aiplatform.Model(model_name=model_resource_name)
-            endpoint = aiplatform.Endpoint.create(display_name=custom_endpoint_name)
+            endpoint = aiplatform.Endpoint.create(display_name=custom_endpoint_name, sync=True)
 
             # Deploy model without waiting for it to complete
             model.deploy(
@@ -898,7 +914,11 @@ def deploy_model():
             return jsonify(endpoint_info), 202
 
         except Exception as deployment_error:
-            return jsonify({"error": f"Deployment request failed: {str(deployment_error)}"}), 500
+            traceback_str = traceback.format_exc()
+            return jsonify({
+                "error": f"Deployment request failed: {str(deployment_error)}",
+                "traceback": traceback_str
+            }), 500
 
     except Exception as e:
         return jsonify({"error": f"Failed to initiate deployment: {e}"}), 500
