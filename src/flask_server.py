@@ -75,14 +75,14 @@ def get_or_refresh_token(curr_user_session):
     # Use the existing global_token to create credentials
     credentials = Credentials(
         token=global_token['token_info']['access_token'],
-        refresh_token=global_token['token_info']['refresh_token'],
+        # refresh_token=global_token['token_info']['refresh_token'],
         token_uri=token_url,  # Token URL to refresh the token
         client_id=client_id,
         client_secret=client_secret,
     )
 
     print("creds: "+str(credentials.token))
-    print("creds: "+str(credentials.refresh_token))
+    # print("creds: "+str(credentials.refresh_token))
     print("creds: "+str(credentials.token_uri))
     print("creds: "+str(credentials.client_id))
     print("creds: "+str(credentials.client_secret))
