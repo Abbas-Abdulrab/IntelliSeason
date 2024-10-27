@@ -782,10 +782,14 @@ def list_models():
     
 @app.route('/list_user_endpoints')
 def list_user_endpoints():
+    import requests
+
     user_email = request.args.get("user_email")
 
     if user_email not in state_store:
-        return jsonify({"error": "Authentication required. Please click the button below to authenticate."}), 401
+        return jsonify({
+            "error": "Authentication required. Please click the button below to authenticate."
+        }), 401
 
     curr_user_session = state_store[user_email]
     print("list-models-method: " + str(curr_user_session))
@@ -808,34 +812,35 @@ def list_user_endpoints():
         "Authorization": f"Bearer {access_token}"
     }
 
-    params = {
-        "filter": f"display_name:{user_id}"
-    }
-
-    response = requests.get(url, headers=headers, params=params)
+    # Remove the filter parameter since it causes a 400 error
+    response = requests.get(url, headers=headers)
 
     if response.status_code != 200:
-        return jsonify({"error": f"Failed to retrieve endpoints: {response.text}"}), response.status_code
+        return jsonify({
+            "error": f"Failed to retrieve endpoints: {response.text}"
+        }), response.status_code
 
     endpoints = response.json().get("endpoints", [])
 
     user_endpoints = []
 
     for ep in endpoints:
-        deployed_models = ep.get("deployedModels", [])
-        if deployed_models:
-            deployed_models_info = []
-            for model in deployed_models:
-                deployed_models_info.append({
-                    "model": model.get("model"),
-                    "display_name": model.get("displayName"),
-                    "model_version_id": model.get("modelVersionId"),
+        display_name = ep.get("displayName", "")
+        if user_id in display_name:
+            deployed_models = ep.get("deployedModels", [])
+            if deployed_models:
+                deployed_models_info = []
+                for model in deployed_models:
+                    deployed_models_info.append({
+                        "model": model.get("model"),
+                        "display_name": model.get("displayName"),
+                        "model_version_id": model.get("modelVersionId"),
+                    })
+                user_endpoints.append({
+                    "display_name": display_name,
+                    "resource_name": ep.get("name"),
+                    "deployed_models": deployed_models_info,
                 })
-            user_endpoints.append({
-                "display_name": ep.get("displayName"),
-                "resource_name": ep.get("name"),
-                "deployed_models": deployed_models_info,
-            })
 
     return jsonify({"endpoints": user_endpoints}), 200
 
@@ -911,7 +916,7 @@ def deploy_model():
                 "status": "Deployment initiated. This process can take around 15 minutes. You will be notified once the endpoint is available."
             }
 
-            return jsonify(endpoint_info), 202
+            return jsonify(endpoint_info), 200
 
         except Exception as deployment_error:
             traceback_str = traceback.format_exc()
