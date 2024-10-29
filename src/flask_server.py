@@ -20,8 +20,8 @@ from google.auth.transport.requests import Request
 from google.cloud import storage, aiplatform
 from concurrent.futures import ThreadPoolExecutor
 import threading
-from global_state_store import state_store, global_model_response
-# from train_pipeline import run_training_pipeline
+from global_state_store import state_store
+from train_pipeline import run_training_pipeline
 
 
 # Load the environment variables from .env file
@@ -611,7 +611,7 @@ def model():
     # TODO: He asked for. To fix this, we should return the data in the response so streamlit can send it back to
     # TODO: get_model_response controller.
     # Clearing the list
-    global_model_response.clear()
+    global_model_response = []
     for payload in payloads:
         response = requests.post(model_url, headers=headers, data=payload)
         if response.status_code == 200:
@@ -619,14 +619,14 @@ def model():
         else:
             return jsonify({"error": f'Failed to retrieve model response. Status code: {response.status_code}, Response: {response.text}'}), 500
 
-    return jsonify({"message": "Model run completed successfully."})
-
-
-@app.route('/get_model_response')
-def get_model_response():
-    if not global_model_response:
-        return jsonify({"error": "No data available"}), 404
+    # return jsonify({"message": "Model run completed successfully."})
     return jsonify(global_model_response)
+
+# @app.route('/get_model_response')
+# def get_model_response():
+#     if not global_model_response:
+#         return jsonify({"error": "No data available"}), 404
+#     return jsonify(global_model_response)
 
 
 # # Function to get tables based on specific ID pattern

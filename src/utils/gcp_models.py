@@ -185,7 +185,7 @@ def decompose_time_series2(df, column, date_column, duplicated_flag=None):
         # Prepare seasonal component for plotting
         seasonal = decomposition.seasonal.iloc[:period].copy()
         if freq_name == 'Weekly':
-            x_labels_seasonal = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+            x_labels_seasonal = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
             seasonal.index = x_labels_seasonal[:len(seasonal)]
         elif freq_name == 'Monthly':
             x_labels_seasonal = list(range(1, len(seasonal) + 1))
@@ -206,8 +206,9 @@ def decompose_time_series2(df, column, date_column, duplicated_flag=None):
         if freq_name == 'Weekly':
             trend_df['DayOfWeek'] = trend_df['Date'].dt.day_name()
             trend_grouped = trend_df.groupby('DayOfWeek')['Trend'].mean()
-            x_labels_trend = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+            x_labels_trend = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
             trend_grouped = trend_grouped.reindex(x_labels_trend)
+
         elif freq_name == 'Monthly':
             trend_df['DayOfMonth'] = trend_df['Date'].dt.day
             trend_grouped = trend_df.groupby('DayOfMonth')['Trend'].mean()
@@ -828,20 +829,21 @@ def run_times_fm():
 
 
                     if response.status_code == 200:
+                        global_times_fm_model_response = response.json()
                         query_string_params = {"user_email": st.query_params["user_email"]}
                         st.success("TimesFM Model run completed. Fetching results...")
-                        response = requests.get(f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/get_model_response', verify=os.environ.get("CERTIFICATE_PATH", False), params=query_string_params)
+                        # response = requests.get(f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/get_model_response', verify=os.environ.get("CERTIFICATE_PATH", False), params=query_string_params)
 
-                        if response.status_code == 200:
-                            try:
-                                global_times_fm_model_response = response.json()
-                                st.write("TimesFM Model response received!")
-                            except requests.exceptions.JSONDecodeError:
-                                st.error("Failed to decode JSON response.")
-                                return
-                        else:
-                            st.error("Failed to fetch TimesFM model response.")
+                        # if response.status_code == 200:
+                        try:
+                            # global_times_fm_model_response = response.json()
+                            st.write("TimesFM Model response received!")
+                        except requests.exceptions.JSONDecodeError:
+                            st.error("Failed to decode JSON response.")
                             return
+                        # else:
+                            # st.error("Failed to fetch TimesFM model response.")
+                            # return
                     else:
                         st.error("Failed to send data to the model.")
                         if "error" in response.json():
