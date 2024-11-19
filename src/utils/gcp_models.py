@@ -22,6 +22,7 @@ import numpy as np
 from datetime import datetime, timedelta
 import re
 import math
+from dateutil import parser
 
 # API URLs
 LIST_MODELS_URL = f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/list_models'
@@ -36,39 +37,49 @@ COLUMNS_API_URL = f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000"
 # URL of the Flask server
 FLASK_SERVER_URL = f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}'
 
-def parse_date(date_data):
+def infer_format(date_series):
+    """
+    Infers the date format by testing a small sample of dates and checking which format works consistently.
+    """
+    # Define potential formats to test
     possible_formats = [
-        "%d/%m/%Y", "%m/%d/%Y", "%Y-%m-%d", "%d-%m-%Y", "%m-%d-%Y", "%Y/%m/%d", "%d.%m.%Y", "%m.%d.%Y",
-        "%Y-%m-%d %H:%M:%S", "%d/%m/%Y %H:%M:%S", "%m/%d/%Y %H:%M:%S", "%Y/%m/%d %H:%M:%S", "%Y-%m-%d %H:%M", 
-        "%d/%m/%Y %H:%M", "%m/%d/%Y %H:%M", "%Y/%m/%d %H:%M", "%Y-%m-%dT%H:%M:%SZ",
+        "%m/%d/%Y",  # MM/DD/YYYY
+        "%d/%m/%Y",  # DD/MM/YYYY
+        "%Y-%m-%d",  # YYYY-MM-DD
+        "%d-%m-%Y",  # DD-MM-YYYY
+        "%m-%d-%Y",  # MM-DD-YYYY
     ]
     
-    def try_parse_single_date(date_str):
-        for fmt in possible_formats:
-            try:
-                return datetime.strptime(date_str, fmt)
-            except ValueError:
-                continue
-        raise ValueError(f"No valid date format found for: {date_str}")
+    # Sample dates to test (sample number can be changed)
+    sample_dates = date_series.dropna().sample(min(30, len(date_series))).tolist()  # Limit to 5 samples for efficiency
     
-    # If it's a single string, parse it directly
-    if isinstance(date_data, str):
-        return try_parse_single_date(date_data)
+    for fmt in possible_formats:
+        try:
+            # Try parsing the sample with the current format
+            parsed_sample = [pd.to_datetime(date, format=fmt) for date in sample_dates]
+            return fmt  # Return the format if parsing succeeds for all sample dates
+        except ValueError:
+            continue
     
-    # If it's a Series, apply the parsing function to each element
-    elif isinstance(date_data, pd.Series):
-        for fmt in possible_formats:
-            try:
-                parsed_dates = date_data.apply(lambda x: datetime.strptime(x, fmt) if pd.notnull(x) else pd.NaT)
-                
-                # Check if all parsed dates are valid (no NaT)
-                if not parsed_dates.isnull().any():
-                    return parsed_dates  # Return the successfully parsed dates
-            except ValueError:
-                continue
+    # If no format was matched, return None
+    return None
+
+def parse_date(date_data):
+    if isinstance(date_data, pd.Series):
+        # Infer format from the series sample
+        inferred_format = infer_format(date_data)
         
-        # If none of the formats work, raise an error
-        raise ValueError("No valid date format found for the series.")
+        # If a format was inferred, use it for parsing
+        if inferred_format:
+            return pd.to_datetime(date_data, format=inferred_format, errors='coerce')
+        
+        # If no consistent format is found, raise an error in Streamlit
+        st.error("Error: No consistent date format detected in the dataset. Please check the date formats.")
+        raise ValueError("No consistent date format detected in the dataset.")
+    
+    elif isinstance(date_data, str):
+        # For a single date string, parse directly
+        return parser.parse(date_data)
     
     else:
         raise TypeError("Input should be a string or a Pandas Series.")
@@ -110,43 +121,42 @@ def parse_date_prophet(date_data):
     
     else:
         raise TypeError("Input should be a string or a Pandas Series.")
-    
-def parse_dates(date_series):
-    """Attempt to parse dates using multiple formats and standardize to 'YYYY-MM-DD'."""
-    formats = [
+
+def infer_format(date_series):
+    """
+    Infers the date format by testing a small sample of dates and checking which format works consistently.
+    """
+    # Define potential formats to test
+    possible_formats = [
         "%d/%m/%Y", "%m/%d/%Y", "%Y-%m-%d", "%d-%m-%Y", "%m-%d-%Y", "%Y/%m/%d", "%d.%m.%Y", "%m.%d.%Y",
         "%Y-%m-%d %H:%M:%S", "%d/%m/%Y %H:%M:%S", "%m/%d/%Y %H:%M:%S", "%Y/%m/%d %H:%M:%S", "%Y-%m-%d %H:%M", 
         "%d/%m/%Y %H:%M", "%m/%d/%Y %H:%M", "%Y/%m/%d %H:%M", "%Y-%m-%dT%H:%M:%SZ",
     ]
-    def try_parsing(date_str, formats):
-        """Try parsing a single date string with multiple formats."""
-        for fmt in formats:
-            try:
-                return pd.to_datetime(date_str, format=fmt, errors='coerce')
-            except ValueError:
-                continue
-        return pd.NaT  # Return NaT if no format matches
+    
+    # Sample dates to test
+    sample_dates = date_series.dropna().sample(min(5, len(date_series))).tolist()  # Limit to 5 samples for efficiency
+    
+    for fmt in possible_formats:
+        try:
+            # Try parsing the sample with the current format
+            parsed_sample = [pd.to_datetime(date, format=fmt) for date in sample_dates]
+            return fmt  # Return the format if parsing succeeds for all sample dates
+        except ValueError:
+            continue
+    
+    # If no format was matched, return None
+    return None
 
-    # Initialize an empty DataFrame for results
-    results = pd.Series(pd.NaT, index=date_series.index, dtype='datetime64[ns]')
+def parse_dates(date_series):
+    """Attempt to parse dates using a consistent format across the dataset and return the parsed dates and format."""
+    inferred_format = infer_format(date_series)
     
-    for fmt in formats:
-        # Apply parsing for the current format
-        temp_results = date_series.apply(lambda x: try_parsing(x, [fmt]))
-        
-        # Update results where there were NaT values previously
-        results.update(temp_results[results.isna()])
-        
-        # Stop if no more NaT values
-        if results.isna().sum() == 0:
-            break
+    if inferred_format:
+        parsed_dates = pd.to_datetime(date_series, format=inferred_format, errors='coerce')
+        return parsed_dates, inferred_format  # Return both parsed dates and the format
     
-    # Handle any remaining NaT values if needed
-    if results.isna().any():
-        print("Warning: Some dates could not be parsed. They have been set to NaT.")
-    
-    return results, fmt
-
+    st.error("Error: No consistent date format detected in the dataset. Please check the date formats.")
+    raise ValueError("No consistent date format detected in the dataset.")
 
 
 
@@ -415,7 +425,8 @@ def run_arima_plus_model():
         df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
         
         st.subheader("Data preview:")
-        st.write(df.head())
+        # st.write(df.head())
+        st.write(df)
 
         # Select date and target columns
         date_column = st.selectbox("Select the date column", [None] + list(df.columns), key="arima_plus_date_column")
@@ -433,7 +444,7 @@ def run_arima_plus_model():
             df[date_column] = df[date_column].apply(parse_date)
             
             df.sort_values(by=[date_column], inplace=True)
-            
+            st.write(df)
             # Handle hourly data by extracting only the date and grouping
             if df[date_column].duplicated().any():
                 duplicated_flag = True
@@ -446,6 +457,7 @@ def run_arima_plus_model():
             # Calculate the percentage of missing dates
             missing_percentage = len(missing_dates) / len(date_range) * 100
 
+            st.write(missing_percentage)
             # Handle missing dates
             if missing_percentage > 10:
                 st.error(
@@ -728,7 +740,36 @@ def run_arima_model():
                         """
                         st.write(nav_script, unsafe_allow_html=True)
 
-                        
+def predict_all_data(data, api_url, endpoint_id, forecast_horizon, date_column):
+    # Convert data to a dictionary format for JSON serialization
+    data_records = data.to_dict(orient="records")
+    
+    # Ensure all dates are in the correct ISO format (%Y-%m-%d)
+    for record in data_records:
+        if isinstance(record[date_column], pd.Timestamp):
+            record[date_column] = record[date_column].strftime('%Y-%m-%d')
+
+    # Send the POST request with all data and forecast horizon included
+    response = requests.post(
+        api_url,
+        verify=os.environ.get("CERTIFICATE_PATH", False),
+        json={
+            "data": data_records,
+            "endpoint_id": endpoint_id,
+            "forecast_horizon": forecast_horizon,
+            "user_email": st.query_params["user_email"]
+        }
+    )
+
+    # Handle the response
+    if response.status_code == 200:
+        predictions = response.json().get('predictions')
+        # Extract and return prediction values
+        return [pred['value'] for pred in predictions]
+    else:
+        st.error(f"Error from Flask: {response.text}")
+        return None
+    
 def run_times_fm():
     duplicated_flag = None
     global_times_fm_model_response = None
@@ -948,21 +989,21 @@ def run_auto_ml():
         df = pd.read_csv(uploaded_file)            
         if df is not None:
             file_path = os.path.join(specific_dir, uploaded_file.name)
-
+            df.columns = df.columns.str.replace(' ', '_').str.replace(r'\(.*?\)', '', regex=True)
             date_column = st.selectbox("Select date column", [None] + list(df.columns), key="auto_forecast_date_column")
             target_column = st.selectbox("Select column to forecast", [None] + list(df.columns), key="auto_forecast_target_column")
             time_series_identifier = st.selectbox("Select time series identifier", [None] + list(df.columns), key="auto_forecast_time_series_identifier")
             period = st.number_input("Forecast Period (days)", min_value=1, value=30, key="auto_forecast_period")
             
             cleaned_file_path = os.path.join(specific_dir, f"cleaned_{uploaded_file.name}")
-            
+
             if st.button('Start AutoML Training'):
                 with st.spinner('Submitting training request...'):
                     
-                    df.columns = df.columns.str.replace(' ', '_').str.replace(r'\(.*?\)', '', regex=True)
                     df[date_column] = df[date_column].apply(parse_date)
                     df = df.dropna(subset=[date_column])
                     st.dataframe(df)
+
                     df.to_csv(cleaned_file_path, index=False)
 
                     data = {
@@ -1212,10 +1253,10 @@ def create_forecast_instances(identifiers, historical_dates, start_date, horizon
 @st.cache_data 
 def filter_and_prepare_data(data, date_column, target_column, selected_category=None, category_column=None, user_selections={}):
     """Filter and prepare the data based on user selections."""
-    
+    st.write('b4')
     # Ensure the date column is properly converted to datetime
     data[date_column], fmt = parse_dates(data[date_column])
-    
+    st.write("after")
     # Drop rows where date conversion failed (if any)
     data = data.dropna(subset=[date_column])
 
@@ -1303,7 +1344,8 @@ def endpoint_predict(selected_endpoint_id):
                 # Handle predictions only if not already computed
                 if st.session_state.predictions is None:
                     # st.session_state.predictions = handle_predictions(filtered_data, forecast_horizon, date_column, f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}', 1.4 * 1024 * 1024, selected_endpoint_id)
-                    st.session_state.predictions  = predict_in_batches(filtered_data, API_URL, BATCH_SIZE_LIMIT, selected_endpoint_id, forecast_horizon, date_column)
+                    # st.session_state.predictions  = predict_in_batches(filtered_data, API_URL, BATCH_SIZE_LIMIT, selected_endpoint_id, forecast_horizon, date_column)
+                    st.session_state.predictions  = predict_all_data(filtered_data, API_URL, selected_endpoint_id, forecast_horizon, date_column)
                 filtered_data['Predicted'] = st.session_state.predictions
                 
                 train_data = filtered_data[filtered_data[date_column] < filtered_data[date_column].max() - pd.Timedelta(days=90)]
