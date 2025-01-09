@@ -1253,10 +1253,8 @@ def create_forecast_instances(identifiers, historical_dates, start_date, horizon
 @st.cache_data 
 def filter_and_prepare_data(data, date_column, target_column, selected_category=None, category_column=None, user_selections={}):
     """Filter and prepare the data based on user selections."""
-    st.write('b4')
     # Ensure the date column is properly converted to datetime
     data[date_column], fmt = parse_dates(data[date_column])
-    st.write("after")
     # Drop rows where date conversion failed (if any)
     data = data.dropna(subset=[date_column])
 
