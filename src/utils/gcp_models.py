@@ -774,12 +774,12 @@ def run_times_fm():
     duplicated_flag = None
     global_times_fm_model_response = None
     st.title("Time Series Forecasting with TimesFM")
-    times_fm_uploaded_file = None
     times_fm_uploaded_file = st.file_uploader('Upload CSV file for TimesFM', type='csv')
 
     if times_fm_uploaded_file:
         # Load and process the CSV
         times_fm_df_actual = pd.read_csv(times_fm_uploaded_file)
+        # Clean up column names
         times_fm_df_actual.columns = times_fm_df_actual.columns.str.replace(' ', '_').str.replace(r'\(.*?\)', '', regex=True)
         times_fm_columns = times_fm_df_actual.columns.tolist()
 
@@ -789,22 +789,23 @@ def run_times_fm():
         time_series_id_col = st.selectbox("Select the time series ID column (optional)", [None] + times_fm_columns, key="times_fm_series_id_column")
         
         if times_fm_date_column and times_fm_actual_column:
+            # Optional: filter by selected time series ID
             if time_series_id_col:
                 unique_values = times_fm_df_actual[time_series_id_col].unique()
                 selected_value = st.selectbox(f"Select a value for {time_series_id_col}", unique_values, key="times_fm_selected_value")
                 times_fm_df_actual = times_fm_df_actual[times_fm_df_actual[time_series_id_col] == selected_value]
 
-            # Date parsing
-            # times_fm_df_actual[times_fm_date_column] = pd.to_datetime(times_fm_df_actual[times_fm_date_column], errors='coerce')#format='%d/%m/%Y')
+            # Parse dates
             times_fm_df_actual[times_fm_date_column] = times_fm_df_actual[times_fm_date_column].apply(parse_date)
+
+            # If duplicates in the date column, group and sum
             if times_fm_df_actual[times_fm_date_column].duplicated().any():
                 duplicated_flag = True
                 times_fm_df_actual[times_fm_date_column] = times_fm_df_actual[times_fm_date_column].dt.date
-
-                # Group by the date and sum the target values
                 times_fm_df_actual = times_fm_df_actual.groupby(times_fm_date_column, as_index=False)[times_fm_actual_column].sum()
 
             times_fm_df_actual.sort_values(by=[times_fm_date_column], inplace=True)
+
             # Check if data is in daily form
             min_date = times_fm_df_actual[times_fm_date_column].min()
             max_date = times_fm_df_actual[times_fm_date_column].max()
@@ -818,142 +819,137 @@ def run_times_fm():
                 st.warning("Your data is not in daily form, please use AutoML as a recommended model.")
                 return
             else:
-                # Proceed with TimesFM training
                 # Convert target column to numeric
                 times_fm_df_actual[times_fm_actual_column] = pd.to_numeric(times_fm_df_actual[times_fm_actual_column], errors='coerce')
                 times_fm_df_actual.dropna(subset=[times_fm_actual_column], inplace=True)
 
-                # Set date column as index
+                # Make sure data is daily frequency with no gaps
                 times_fm_df_actual.set_index(times_fm_date_column, inplace=True)
-
-                # Ensure the data has a daily frequency
                 times_fm_df_actual = times_fm_df_actual.asfreq('D')
-                times_fm_df_actual = times_fm_df_actual.fillna(method='ffill')  # Forward fill missing values
-
-                # Reset index
+                times_fm_df_actual = times_fm_df_actual.fillna(method='ffill')
                 times_fm_df_actual.reset_index(inplace=True)
 
-                # Allow user to specify forecast horizon
+                # Forecast horizon
                 forecast_horizon = st.number_input("Enter the forecast horizon (number of periods):", min_value=1, max_value=256, value=30)
 
-                # Set test size as 10% of the dataset
+                # Test size = 10% of data
                 test_size = max(1, int(0.1 * len(times_fm_df_actual)))
+                forecast_horizon += test_size  # horizon = horizon + test_size
 
-                # Update the forecast horizon to be horizon + test_size
-                forecast_horizon += test_size
-
-                # Check dataset length
+                # Ensure dataset is large enough
                 if len(times_fm_df_actual) < 2 * forecast_horizon:
                     st.warning("Dataset is too short for the specified forecast horizon.")
                     return
 
-                # Split into train and test sets
+                # Train/test split
                 train_df = times_fm_df_actual.iloc[:-test_size]
                 test_df = times_fm_df_actual.iloc[-test_size:]
 
+                # Start training button
                 if st.button('Start TimesFM Training'):
-                    # Convert DataFrame to CSV buffer
+                    # Convert train_df to CSV string
                     relevant_columns = [times_fm_date_column, times_fm_actual_column]
                     times_fm_train_csv_buffer = StringIO()
                     train_df[relevant_columns].to_csv(times_fm_train_csv_buffer, index=False, lineterminator='\n')
                     times_fm_train_csv_buffer.seek(0)
 
-                    # Send training data to the model
-                    response = requests.post(f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/model', verify=os.environ.get("CERTIFICATE_PATH", False), json={
-                        'csv_data': times_fm_train_csv_buffer.getvalue(),
-                        'date_column': times_fm_date_column,
-                        'target_column': times_fm_actual_column, 
-                        'user_email': st.query_params["user_email"]
-                    })
-
-                    print(f'[DEBUG] POST Request sent to {os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/model')
-
+                    # Send to model
+                    response = requests.post(
+                        f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/model',
+                        verify=os.environ.get("CERTIFICATE_PATH", False),
+                        json={
+                            'csv_data': times_fm_train_csv_buffer.getvalue(),
+                            'date_column': times_fm_date_column,
+                            'target_column': times_fm_actual_column,
+                            'user_email': st.query_params["user_email"]
+                        }
+                    )
+                    print('[DEBUG] POST Request sent to /model')
 
                     if response.status_code == 200:
+                        # Retrieve JSON
                         global_times_fm_model_response = response.json()
-                        query_string_params = {"user_email": st.query_params["user_email"]}
                         st.success("TimesFM Model run completed. Fetching results...")
-                        # response = requests.get(f'{os.environ.get("FLASK_SERVER_ADDR", "http://localhost:5000")}/get_model_response', verify=os.environ.get("CERTIFICATE_PATH", False), params=query_string_params)
-
-                        # if response.status_code == 200:
                         try:
-                            # global_times_fm_model_response = response.json()
                             st.write("TimesFM Model response received!")
                         except requests.exceptions.JSONDecodeError:
                             st.error("Failed to decode JSON response.")
                             return
-                        # else:
-                            # st.error("Failed to fetch TimesFM model response.")
-                            # return
                     else:
                         st.error("Failed to send data to the model.")
                         if "error" in response.json():
                             print(response.json())
                         return
+
                     if global_times_fm_model_response:
                         mean_forecasts = []
 
-                        # Loop over each response (chunk of predictions)
+                        # For each chunk in the response
                         for chunk_index, response_data in enumerate(global_times_fm_model_response):
+                            # 'predictions' is typically a list of dicts, each with "point_forecast" or "quantile_forecast"
                             predictions = response_data.get('predictions', [])
                             
+                            # If your JSON structure is as you described:
+                            #    "point_forecast": [...],
+                            #    "quantile_forecast": [...],
+                            #    "quantiles": [...]
                             if predictions:
                                 for forecast in predictions:
-                                    # Extract p10, p20, ..., p90 from the forecast
-                                    p10 = forecast.get('p10', [])
-                                    p20 = forecast.get('p20', [])
-                                    p30 = forecast.get('p30', [])
-                                    p40 = forecast.get('p40', [])
-                                    p50 = forecast.get('p50', [])
-                                    p60 = forecast.get('p60', [])
-                                    p70 = forecast.get('p70', [])
-                                    p80 = forecast.get('p80', [])
-                                    p90 = forecast.get('p90', [])
+                                    # EXAMPLE: parse point_forecast
+                                    point_vals = forecast.get('point_forecast', [])
+                                    # If you prefer quantile_forecast, adapt accordingly:
+                                    # quantiles = forecast.get('quantiles', [])
+                                    # qf = forecast.get('quantile_forecast', [])
 
-                                    # For each index (0 to 256), calculate the mean of p10, p20, ..., p90
-                                    # Assuming each p10, p20, etc. has the same length
-                                    mean_forecast = []
-                                    for i in range(len(p10)):  # or any of p10, p20, etc. since their lengths should be the same
-                                        mean_value = np.mean([p10[i], p20[i], p30[i], p40[i], p50[i], p60[i], p70[i], p80[i], p90[i]])
-                                        mean_forecast.append(mean_value)
-
-                                    # Convert the mean_forecast list to a DataFrame for consistency
-                                    df_mean = pd.DataFrame(mean_forecast, columns=[f'Mean Forecast for Chunk {chunk_index}'])
-
-                                    # Append the DataFrame to the list
-                                    
-                                    mean_forecasts.append(df_mean)
-                            
+                                    if point_vals:
+                                        # Put the point forecast into a DataFrame
+                                        # e.g. one column named "Chunk X Forecast"
+                                        df_pf = pd.DataFrame(
+                                            point_vals,
+                                            columns=[f'Forecast_Chunk_{chunk_index}']
+                                        )
+                                        mean_forecasts.append(df_pf)
 
                         if mean_forecasts:
-                            
-                            # Concatenate all mean forecasts across all chunks
-                            mean_forecasts = pd.concat(mean_forecasts, axis=1, ignore_index=True)
-                            df_point = mean_forecasts
-                            # Display the final DataFrame containing the combined mean forecasts
+                            # Concatenate all chunk DataFrames horizontally
+                            df_point = pd.concat(mean_forecasts, axis=1, ignore_index=False)
+
+                            # We must have as many rows as the total length of point_forecast
+                            # Now assign a date range that starts right after train_df ends
                             start_date = train_df[times_fm_date_column].max() + timedelta(days=1)
-                            test_days = 256
+                            test_days = 256  # or forecast_horizon, up to you
                             end_date = start_date + timedelta(days=test_days - 1)
                             date_range = pd.date_range(start=start_date, end=end_date, periods=len(df_point))
-                            
+
+                            # Attach the date column
                             df_point[times_fm_date_column] = date_range
-                            
-                            df_point.columns.values[-2] = 'value'
+
+                            # We'll rename the last column to "value" for easy plotting
+                            # If you only have 1 chunk, the "last column" is the forecast
+                            # if you have multiple chunks, pick whichever column you want
+                            # for demonstration, let's assume you have 1 chunk:
+                            df_point.rename(
+                                columns={df_point.columns[0]: 'value'},
+                                inplace=True
+                            )
+
                             st.subheader("Forecast DataFrame:")
                             st.dataframe(df_point[[times_fm_date_column, 'value']], use_container_width=True)
+
                             forecast_results = df_point[[times_fm_date_column, 'value']]
-                            
+
+                            # Plot
                             times_fm_df_actual[times_fm_date_column] = pd.to_datetime(times_fm_df_actual[times_fm_date_column])
-                            # times_fm_df_actual.set_index('date', inplace=True)
                             st.divider()
                             plot_forecast(train_df, test_df, df_point, times_fm_date_column, times_fm_actual_column, is_go=True)
                             
                             st.divider()
-                            # Merge test data and forecasted data on date
+                            # Merge test data and forecast on date
                             aligned_df = pd.merge(test_df, df_point, on=times_fm_date_column, how='inner')
                             actual_values = aligned_df[times_fm_actual_column].values
                             predicted_values = aligned_df['value'].values
-                            # Remove NaNs from actual_values and predicted_values
+
+                            # Drop NaNs
                             mask = (~np.isnan(actual_values)) & (~np.isnan(predicted_values))
                             actual_values = actual_values[mask]
                             predicted_values = predicted_values[mask]
@@ -962,12 +958,18 @@ def run_times_fm():
                                 st.error("No valid data points for accuracy calculation after removing NaNs.")
                             else:
                                 calculate_accuracy(actual_values, predicted_values, flag=True)
-                            # calculate_accuracy(test_df[times_fm_actual_column].values, df_point['value'].values, flag=True)
+
                             st.divider()
-                            decompose_time_series2(times_fm_df_actual, times_fm_actual_column, times_fm_date_column, duplicated_flag)
+                            # Decomposition
+                            decompose_time_series2(
+                                times_fm_df_actual,
+                                times_fm_actual_column,
+                                times_fm_date_column,
+                                duplicated_flag
+                            )
                             
-                    
                             st.divider()
+                            # Download
                             csv = forecast_results.to_csv(index=False)
                             st.download_button(
                                 label="Download data as CSV",
@@ -975,6 +977,7 @@ def run_times_fm():
                                 file_name='predictions.csv',
                                 mime='text/csv'
                             )
+
 
 def run_auto_ml():
     st.subheader("AutoML")
